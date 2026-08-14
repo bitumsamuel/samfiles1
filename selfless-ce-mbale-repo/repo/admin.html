@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selfless CE — Admin Finance Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0E2340; --navy-mid:#173A63; --navy-line:#2A4E7C;
+    --cream:#F7F3EA; --cream-2:#EFE8D8; --gold:#C99A3E; --gold-light:#E4C784;
+    --ink:#1B2430; --ink-soft:#4B5568;
+    --ok:#2E7D4F; --warn:#B8862F; --err:#B4362E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Work Sans',sans-serif;background:var(--cream);color:var(--ink);}
+  h1,h2,.display{font-family:'Fraunces',serif;font-weight:600;color:var(--navy-deep);margin:0;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy-deep);padding:22px 0;}
+  header .wrap{display:flex;justify-content:space-between;align-items:center;}
+  header h1{color:var(--cream);font-size:20px;}
+  header .sub{color:var(--gold-light);font-size:12px;letter-spacing:0.05em;text-transform:uppercase;}
+  #logout{background:none;border:1px solid rgba(247,243,234,0.4);color:var(--cream);padding:8px 14px;border-radius:2px;cursor:pointer;font-size:13px;}
+
+  #login-view{max-width:380px;margin:90px auto;padding:36px;background:#fff;border:1px solid var(--cream-2);}
+  #login-view h2{font-size:22px;margin-bottom:6px;}
+  #login-view p{color:var(--ink-soft);font-size:13.5px;margin-bottom:22px;}
+  label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);display:block;margin-bottom:6px;}
+  input,select,textarea{width:100%;padding:11px 13px;border:1px solid var(--cream-2);font-family:inherit;font-size:14px;margin-bottom:16px;border-radius:2px;}
+  button.primary{background:var(--gold);color:var(--navy-deep);border:none;padding:12px 20px;font-weight:600;font-size:14px;cursor:pointer;border-radius:2px;width:100%;}
+  button.primary:hover{background:var(--gold-light);}
+  .error{color:var(--err);font-size:13px;margin-top:-8px;margin-bottom:14px;}
+
+  main{display:none;padding:36px 0 80px;}
+  section{background:#fff;border:1px solid var(--cream-2);padding:26px;margin-bottom:28px;}
+  section h2{font-size:18px;margin-bottom:16px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--cream-2);}
+  th{color:var(--ink-soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;}
+  .badge{padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;}
+  .badge.pending{background:#F0E5CE;color:var(--warn);}
+  .badge.processing{background:#DDE8F5;color:var(--navy-mid);}
+  .badge.paid{background:#DCEFDF;color:var(--ok);}
+  .badge.failed{background:#F5DEDC;color:var(--err);}
+  .btn-sm{background:var(--navy-deep);color:var(--cream);border:none;padding:7px 12px;font-size:12.5px;border-radius:2px;cursor:pointer;}
+  .btn-sm:hover{background:var(--navy-mid);}
+  .btn-sm:disabled{opacity:0.5;cursor:not-allowed;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div>
+      <h1>Selfless CE</h1>
+      <div class="sub">Admin Finance Dashboard</div>
+    </div>
+    <button id="logout" style="display:none;">Log out</button>
+  </div>
+</header>
+
+<div id="login-view">
+  <h2>Admin Login</h2>
+  <p>Sign in to manage students, tutors, and payments.</p>
+  <label>Email</label>
+  <input id="login-email" type="email" placeholder="admin@selfless-ce.org">
+  <label>Password</label>
+  <input id="login-password" type="password" placeholder="••••••••">
+  <div class="error" id="login-error" style="display:none;"></div>
+  <button class="primary" id="login-btn">Sign In</button>
+</div>
+
+<main id="main">
+  <div class="wrap">
+
+    <section>
+      <h2>Add Student or Tutor</h2>
+      <div class="grid2">
+        <div><label>Full Name</label><input id="u-name"></div>
+        <div><label>Role</label>
+          <select id="u-role"><option value="student">Student</option><option value="tutor">Tutor</option></select>
+        </div>
+        <div><label>Email</label><input id="u-email" type="email"></div>
+        <div><label>Temporary Password</label><input id="u-password" type="text" placeholder="Set an initial password"></div>
+        <div><label>MTN MoMo Number</label><input id="u-momo" placeholder="e.g. 25677xxxxxxx"></div>
+        <div><label>Bank Name (optional)</label><input id="u-bank-name"></div>
+        <div><label>Bank Account (optional)</label><input id="u-bank-account"></div>
+      </div>
+      <div class="error" id="u-error" style="display:none;"></div>
+      <button class="primary" id="u-submit" style="width:auto;">Add Person</button>
+    </section>
+
+    <section>
+      <h2>Log a New Payment</h2>
+      <div class="grid2">
+        <div><label>Recipient</label><select id="p-recipient"></select></div>
+        <div><label>Method</label>
+          <select id="p-method"><option value="momo">MTN Mobile Money</option><option value="bank">Bank Transfer</option></select>
+        </div>
+        <div><label>Amount (UGX)</label><input id="p-amount" type="number" min="0"></div>
+        <div><label>Note</label><input id="p-note" placeholder="e.g. October stipend"></div>
+      </div>
+      <div class="error" id="p-error" style="display:none;"></div>
+      <button class="primary" id="p-submit" style="width:auto;">Add to Queue</button>
+    </section>
+
+    <section>
+      <h2>Payments</h2>
+      <table>
+        <thead><tr><th>Recipient</th><th>Amount</th><th>Method</th><th>Status</th><th>Note</th><th>Action</th></tr></thead>
+        <tbody id="payments-table"></tbody>
+      </table>
+    </section>
+
+  </div>
+</main>
+
+<script>
+  // Set this to your deployed Worker URL (same one used by the chat widget).
+  const API = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+
+  let token = localStorage.getItem('sce_admin_token') || null;
+  let usersCache = [];
+
+  const loginView = document.getElementById('login-view');
+  const main = document.getElementById('main');
+  const logoutBtn = document.getElementById('logout');
+
+  function showApp(){
+    loginView.style.display = 'none';
+    main.style.display = 'block';
+    logoutBtn.style.display = 'inline-block';
+    loadUsers();
+    loadPayments();
+  }
+
+  if(token){ showApp(); }
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try{
+      const res = await fetch(`${API}/api/auth/login`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({email, password})
+      });
+      const data = await res.json();
+      if(!res.ok || data.role !== 'admin'){ throw new Error(data.error || 'Not an admin account'); }
+      token = data.token;
+      localStorage.setItem('sce_admin_token', token);
+      showApp();
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('sce_admin_token');
+    location.reload();
+  });
+
+  async function authed(path, opts={}){
+    const res = await fetch(`${API}${path}`, {
+      ...opts,
+      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers||{}) }
+    });
+    if(res.status === 401){ localStorage.removeItem('sce_admin_token'); location.reload(); }
+    return res.json();
+  }
+
+  async function loadUsers(){
+    const data = await authed('/api/admin/users');
+    usersCache = data.users || [];
+    const sel = document.getElementById('p-recipient');
+    sel.innerHTML = usersCache.map(u => `<option value="${u.id}|${u.role}">${u.name} (${u.role})</option>`).join('');
+  }
+
+  document.getElementById('u-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('u-error');
+    errEl.style.display = 'none';
+    const body = {
+      name: document.getElementById('u-name').value,
+      role: document.getElementById('u-role').value,
+      email: document.getElementById('u-email').value,
+      password: document.getElementById('u-password').value,
+      momo_number: document.getElementById('u-momo').value,
+      bank_name: document.getElementById('u-bank-name').value,
+      bank_account: document.getElementById('u-bank-account').value,
+    };
+    if(!body.name || !body.email || !body.password){
+      errEl.textContent = 'Name, email, and a temporary password are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/users', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('u-name').value = '';
+    document.getElementById('u-email').value = '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-momo').value = '';
+    document.getElementById('u-bank-name').value = '';
+    document.getElementById('u-bank-account').value = '';
+    loadUsers();
+  });
+
+  document.getElementById('p-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('p-error');
+    errEl.style.display = 'none';
+    const [recipient_id, recipient_type] = document.getElementById('p-recipient').value.split('|');
+    const body = {
+      recipient_id: Number(recipient_id),
+      recipient_type,
+      method: document.getElementById('p-method').value,
+      amount: Number(document.getElementById('p-amount').value),
+      note: document.getElementById('p-note').value,
+    };
+    if(!recipient_id || !body.amount){
+      errEl.textContent = 'Choose a recipient and enter an amount.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/payments', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('p-amount').value = '';
+    document.getElementById('p-note').value = '';
+    loadPayments();
+  });
+
+  async function loadPayments(){
+    const data = await authed('/api/admin/payments');
+    const rows = (data.payments || []).map(p => `
+      <tr>
+        <td>${p.recipient_name}</td>
+        <td>${p.amount.toLocaleString()} ${p.currency}</td>
+        <td>${p.method === 'momo' ? 'MTN MoMo' : 'Bank'}</td>
+        <td><span class="badge ${p.status}">${p.status}</span></td>
+        <td>${p.note || ''}</td>
+        <td>${p.status === 'pending' ? `<button class="btn-sm" onclick="payNow(${p.id}, '${p.method}')">Pay Now</button>` :
+              p.status === 'processing' ? `<button class="btn-sm" onclick="checkStatus(${p.id})">Check Status</button>` : '—'}</td>
+      </tr>`).join('');
+    document.getElementById('payments-table').innerHTML = rows || '<tr><td colspan="6">No payments yet.</td></tr>';
+  }
+
+  window.payNow = async function(id, method){
+    if(method === 'bank'){
+      const ref = prompt('Enter the bank transfer reference number once you\\'ve sent it manually:');
+      if(ref === null) return;
+      await authed(`/api/admin/payments/${id}/pay`, { method:'POST', body: JSON.stringify({ reference: ref }) });
+    } else {
+      if(!confirm('This will trigger a real MTN MoMo disbursement. Continue?')) return;
+      await authed(`/api/admin/payments/${id}/pay`, { method:'POST', body: '{}' });
+    }
+    loadPayments();
+  };
+
+  window.checkStatus = async function(id){
+    await authed(`/api/admin/payments/${id}/status`);
+    loadPayments();
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<title>Selfless CE Mbale Tech Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0E2340;
+    --navy-mid:#173A63;
+    --navy-line:#2A4E7C;
+    --cream:#F7F3EA;
+    --cream-2:#EFE8D8;
+    --gold:#C99A3E;
+    --gold-light:#E4C784;
+    --ink:#1B2430;
+    --ink-soft:#4B5568;
+    --radius:2px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:'Work Sans',sans-serif;
+    color:var(--ink);
+    background:var(--cream);
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:var(--navy-deep);
+    margin:0;
+  }
+  a{color:inherit;text-decoration:none;}
+  img{max-width:100%;display:block;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px;}
+  .eyebrow{
+    font-family:'Work Sans',sans-serif;
+    font-size:12.5px;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--gold);
+    font-weight:600;
+  }
+
+  /* Header */
+  header{
+    position:sticky;top:0;z-index:50;
+    background:var(--navy-deep);
+    border-bottom:1px solid var(--navy-line);
+  }
+  header .wrap{
+    display:flex;align-items:center;justify-content:space-between;
+    height:74px;
+  }
+  .logo{
+    display:flex;align-items:center;gap:10px;
+    color:var(--cream);
+    font-family:'Fraunces',serif;font-weight:600;font-size:19px;
+  }
+  .logo .mark{
+    width:34px;height:34px;border:1.5px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;color:var(--gold);font-weight:700;
+    transform:rotate(45deg);flex:none;
+  }
+  .logo .mark span{transform:rotate(-45deg);}
+  nav.primary ul{list-style:none;display:flex;gap:36px;margin:0;padding:0;}
+  nav.primary a{
+    color:var(--cream);font-size:14.5px;font-weight:500;
+    letter-spacing:0.01em;
+    padding:6px 0;border-bottom:1px solid transparent;
+    transition:border-color .2s, color .2s;
+  }
+  nav.primary a:hover{border-color:var(--gold);color:var(--gold-light);}
+  .btn{
+    display:inline-block;
+    padding:13px 26px;
+    font-size:14px;font-weight:600;letter-spacing:0.02em;
+    border-radius:var(--radius);
+    border:1.5px solid transparent;
+    cursor:pointer;
+  }
+  .btn-gold{background:var(--gold);color:var(--navy-deep);}
+  .btn-gold:hover{background:var(--gold-light);}
+  .btn-outline{border-color:rgba(247,243,234,0.4);color:var(--cream);}
+  .btn-outline:hover{border-color:var(--gold);color:var(--gold-light);}
+  .menu-toggle{display:none;background:none;border:none;color:var(--cream);font-size:26px;cursor:pointer;}
+
+  /* Hero */
+  .hero{
+    position:relative;
+    min-height:640px;
+    display:flex;align-items:center;
+    background:linear-gradient(115deg, rgba(14,35,64,0.94) 0%, rgba(14,35,64,0.80) 45%, rgba(14,35,64,0.55) 100%),
+               url('https://selfless-ce.web.app/images/hero-image.jpeg') center/cover no-repeat;
+  }
+  .hero .wrap{padding-top:96px;padding-bottom:96px;}
+  .hero-grid{display:grid;grid-template-columns:1.15fr 0.85fr;gap:56px;align-items:end;}
+  .hero h1{
+    color:var(--cream);
+    font-size:clamp(38px,5.2vw,64px);
+    line-height:1.04;
+    margin-top:16px;
+  }
+  .hero h1 em{color:var(--gold-light);font-style:normal;}
+  .hero p.lede{
+    color:rgba(247,243,234,0.82);
+    font-size:17px;line-height:1.65;
+    max-width:46ch;margin-top:20px;
+  }
+  .hero-actions{display:flex;gap:14px;margin-top:32px;flex-wrap:wrap;}
+  .hero-card{
+    background:rgba(247,243,234,0.06);
+    border:1px solid rgba(247,243,234,0.18);
+    padding:28px;
+  }
+  .hero-card .num{
+    font-family:'Fraunces',serif;font-size:44px;color:var(--gold);line-height:1;
+  }
+  .hero-card p{color:rgba(247,243,234,0.85);font-size:14.5px;line-height:1.6;margin:10px 0 0;}
+  .hero-card + .hero-card{margin-top:16px;}
+
+  section{padding:96px 0;}
+  .section-head{max-width:640px;margin-bottom:52px;}
+  .section-head h2{font-size:clamp(28px,3.4vw,40px);margin-top:12px;line-height:1.1;}
+  .section-head p{color:var(--ink-soft);font-size:16px;line-height:1.7;margin-top:14px;}
+  .center{text-align:center;margin-left:auto;margin-right:auto;}
+
+  /* Mission band */
+  .mission{background:var(--navy-deep);color:var(--cream);}
+  .mission .wrap{max-width:820px;text-align:center;}
+  .mission .eyebrow{color:var(--gold-light);}
+  .mission h2{color:var(--cream);font-size:clamp(26px,3.6vw,38px);margin-top:14px;line-height:1.25;}
+  .mission p{color:rgba(247,243,234,0.78);font-size:16.5px;line-height:1.75;margin-top:20px;}
+
+  /* Values acrostic - signature element */
+  .values{background:var(--cream);}
+  .values-layout{display:grid;grid-template-columns:220px 1fr;gap:0;border-top:1px solid var(--cream-2);}
+  .acrostic{display:flex;flex-direction:column;}
+  .acrostic .letter-row{
+    display:flex;align-items:baseline;gap:14px;
+    padding:16px 0;border-bottom:1px solid var(--cream-2);
+  }
+  .acrostic .letter{
+    font-family:'Fraunces',serif;font-size:34px;font-weight:700;color:var(--navy-deep);
+    width:34px;flex:none;
+  }
+  .acrostic .word{font-size:14px;color:var(--ink-soft);font-weight:500;letter-spacing:0.02em;}
+  .belief-grid{
+    display:grid;grid-template-columns:1fr 1fr;
+  }
+  .belief-item{
+    padding:32px 34px;border-bottom:1px solid var(--cream-2);border-left:1px solid var(--cream-2);
+  }
+  .belief-item img{width:44px;height:44px;object-fit:contain;margin-bottom:16px;}
+  .belief-item h3{font-size:19px;}
+  .belief-item p, .belief-item ul{color:var(--ink-soft);font-size:14.5px;line-height:1.65;margin-top:10px;}
+  .belief-item ul{margin:10px 0 0;padding-left:18px;}
+
+  /* Centers */
+  .centers{background:var(--navy-deep);}
+  .centers .eyebrow{color:var(--gold-light);}
+  .centers .section-head h2, .centers .section-head p{color:var(--cream);}
+  .centers .section-head p{color:rgba(247,243,234,0.72);}
+  .center-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--navy-line);}
+  .center-card{background:var(--navy-deep);padding:26px;}
+  .center-card .thumb{height:150px;overflow:hidden;margin-bottom:18px;filter:saturate(0.85);}
+  .center-card .thumb img{width:100%;height:100%;object-fit:cover;}
+  .center-card h3{color:var(--cream);font-size:17px;}
+  .center-card dl{margin:14px 0 0;font-size:13.5px;color:rgba(247,243,234,0.75);line-height:1.9;}
+  .center-card dt{color:var(--gold-light);display:inline;font-weight:600;}
+  .center-card dd{display:inline;margin:0;}
+  .center-card dd::after{content:"";display:block;}
+
+  /* Programs */
+  .programs{background:var(--cream);}
+  .program-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;}
+  .program-card{
+    background:#fff;border:1px solid var(--cream-2);padding:30px;
+    display:flex;flex-direction:column;height:100%;
+  }
+  .program-card .deadline{font-size:12px;letter-spacing:0.06em;color:var(--gold);font-weight:600;text-transform:uppercase;}
+  .program-card h3{font-size:21px;margin-top:14px;}
+  .program-card p{color:var(--ink-soft);font-size:14.5px;line-height:1.65;margin-top:12px;flex:1;}
+  .tag-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;}
+  .tag{
+    font-size:12px;padding:5px 11px;border:1px solid var(--navy-line);color:var(--navy-mid);
+    border-radius:999px;
+  }
+  .program-card .btn{margin-top:22px;align-self:flex-start;}
+
+  /* FAQ */
+  .faq{background:var(--navy-deep);}
+  .faq .eyebrow{color:var(--gold-light);}
+  .faq .section-head h2, .faq .section-head p{color:var(--cream);}
+  .faq .section-head p{color:rgba(247,243,234,0.72);}
+  .faq-list{max-width:820px;border-top:1px solid var(--navy-line);}
+  .faq-item{border-bottom:1px solid var(--navy-line);}
+  .faq-item summary{
+    list-style:none;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:22px 4px;color:var(--cream);font-size:16.5px;font-family:'Fraunces',serif;font-weight:500;
+  }
+  .faq-item summary::-webkit-details-marker{display:none;}
+  .faq-item summary::after{
+    content:"+";color:var(--gold);font-size:22px;font-family:'Work Sans',sans-serif;flex:none;margin-left:20px;
+  }
+  .faq-item[open] summary::after{content:"–";}
+  .faq-item p{color:rgba(247,243,234,0.75);font-size:14.5px;line-height:1.7;padding:0 4px 24px;max-width:70ch;}
+
+  /* Gallery */
+  .gallery{background:var(--cream);}
+  .gallery-grid{
+    display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:170px;gap:6px;
+  }
+  .gallery-grid a{grid-column:span 1;grid-row:span 1;overflow:hidden;position:relative;}
+  .gallery-grid a:nth-child(4n+1){grid-row:span 2;}
+  .gallery-grid img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease;}
+  .gallery-grid a:hover img{transform:scale(1.06);}
+
+  /* Contact / Footer */
+  footer{background:var(--navy-deep);color:var(--cream);}
+  .contact-band{border-bottom:1px solid var(--navy-line);}
+  .contact-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:60px;padding:80px 0;}
+  .contact-grid h2{color:var(--cream);font-size:clamp(26px,3.4vw,36px);}
+  .contact-grid p{color:rgba(247,243,234,0.75);font-size:15.5px;line-height:1.7;margin-top:16px;max-width:44ch;}
+  .contact-detail{margin-top:24px;}
+  .contact-detail .row{display:flex;gap:14px;align-items:center;margin-top:14px;font-size:15px;}
+  .contact-detail img{width:20px;height:20px;filter:invert(84%) sepia(22%) saturate(500%) hue-rotate(0deg) brightness(1.1);}
+  .contact-form input,.contact-form textarea{
+    width:100%;background:rgba(247,243,234,0.06);border:1px solid var(--navy-line);
+    color:var(--cream);padding:14px 16px;font-family:inherit;font-size:14.5px;margin-bottom:14px;
+    border-radius:var(--radius);
+  }
+  .contact-form label{font-size:12.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--gold-light);display:block;margin-bottom:6px;}
+  .foot-bottom{padding:26px 0;}
+  .foot-bottom .wrap{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:rgba(247,243,234,0.55);flex-wrap:wrap;gap:10px;}
+
+  /* AI Chat Widget */
+  #sce-chat-bubble{
+    position:fixed;bottom:26px;right:26px;z-index:200;
+    width:58px;height:58px;border-radius:50%;
+    background:var(--navy-deep);border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;box-shadow:0 8px 24px rgba(14,35,64,0.35);
+    transition:transform .18s ease;
+  }
+  #sce-chat-bubble:hover{transform:translateY(-3px);}
+  #sce-chat-bubble svg{width:26px;height:26px;}
+  #sce-chat-panel{
+    position:fixed;bottom:98px;right:26px;z-index:200;
+    width:360px;max-width:calc(100vw - 40px);
+    height:480px;max-height:calc(100vh - 150px);
+    background:var(--cream);border:1px solid var(--navy-line);
+    box-shadow:0 20px 60px rgba(14,35,64,0.35);
+    display:none;flex-direction:column;overflow:hidden;
+  }
+  #sce-chat-panel.open{display:flex;}
+  .sce-chat-head{
+    background:var(--navy-deep);color:var(--cream);
+    padding:16px 18px;display:flex;align-items:center;justify-content:space-between;
+    flex:none;
+  }
+  .sce-chat-head .title{font-family:'Fraunces',serif;font-size:16px;font-weight:600;}
+  .sce-chat-head .sub{font-size:11.5px;color:var(--gold-light);margin-top:2px;}
+  .sce-chat-head button{background:none;border:none;color:var(--cream);font-size:20px;cursor:pointer;line-height:1;}
+  .sce-chat-body{
+    flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;
+    background:#fff;
+  }
+  .sce-msg{max-width:82%;padding:10px 13px;font-size:13.5px;line-height:1.55;border-radius:3px;}
+  .sce-msg.bot{background:var(--cream-2);color:var(--ink);align-self:flex-start;border-bottom-left-radius:0;}
+  .sce-msg.user{background:var(--navy-deep);color:var(--cream);align-self:flex-end;border-bottom-right-radius:0;}
+  .sce-msg.typing{background:var(--cream-2);color:var(--ink-soft);align-self:flex-start;font-style:italic;}
+  .sce-chat-foot{
+    flex:none;border-top:1px solid var(--cream-2);padding:12px;
+    display:flex;gap:8px;background:var(--cream);
+  }
+  .sce-chat-foot input{
+    flex:1;border:1px solid var(--cream-2);padding:10px 12px;font-family:inherit;
+    font-size:13.5px;border-radius:2px;background:#fff;
+  }
+  .sce-chat-foot input:focus{outline:1.5px solid var(--gold);}
+  .sce-chat-foot button{
+    background:var(--gold);color:var(--navy-deep);border:none;padding:0 16px;
+    font-weight:600;font-size:13px;cursor:pointer;border-radius:2px;
+  }
+  .sce-chat-foot button:disabled{opacity:0.5;cursor:not-allowed;}
+  @media (max-width:480px){
+    #sce-chat-panel{right:16px;bottom:88px;width:calc(100vw - 32px);}
+    #sce-chat-bubble{right:16px;bottom:16px;}
+  }
+
+  @media (max-width:860px){
+    nav.primary, header .btn-outline{display:none;}
+    .menu-toggle{display:block;}
+    .hero-grid{grid-template-columns:1fr;}
+    .belief-grid,.center-grid,.program-grid{grid-template-columns:1fr;}
+    .values-layout{grid-template-columns:1fr;}
+    .acrostic{flex-direction:row;flex-wrap:wrap;gap:0;}
+    .acrostic .letter-row{flex-direction:column;gap:2px;padding:14px 16px;border-right:1px solid var(--cream-2);}
+    .contact-grid{grid-template-columns:1fr;gap:40px;padding:60px 0;}
+    .gallery-grid{grid-template-columns:repeat(2,1fr);}
+    section{padding:64px 0;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="#hero">
+      <span class="mark"><span>S</span></span>
+      Selfless CE <span style="color:var(--gold-light);font-weight:400;">Mbale</span>
+    </a>
+    <nav class="primary">
+      <ul>
+        <li><a href="#hero">Home</a></li>
+        <li><a href="#programs">Our Programs</a></li>
+        <li><a href="#centers">The Center</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+    <a href="#programs" class="btn btn-outline" style="margin-right:0;">Apply Now</a>
+    <button class="menu-toggle" aria-label="Menu">&#9776;</button>
+  </div>
+</header>
+
+<section class="hero" id="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow" style="color:var(--gold-light);">Selfless CE &mdash; Mbale Tech Center</div>
+        <h1>Self-sufficiency starts with <em>self</em>.</h1>
+        <p class="lede">Our Mbale center gives students a place to study, connect, and access technology &mdash; backed by tuition, mentorship, and community support.</p>
+        <div class="hero-actions">
+          <a href="#programs" class="btn btn-gold">Explore Our Programs</a>
+          <a href="#contact" class="btn btn-outline">Visit the Center</a>
+        </div>
+      </div>
+      <div>
+        <div class="hero-card">
+          <div class="num">MB</div>
+          <p>Mbale Tech Center, led by Office Manager Kevin Wangoda, serving students across the Mbale community.</p>
+        </div>
+        <div class="hero-card">
+          <div class="num">03</div>
+          <p>Need-based programs &mdash; tuition, mission support, and temple attendance assistance.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mission">
+  <div class="wrap">
+    <div class="eyebrow">Our Mission</div>
+    <h2>We believe stronger families and communities are built one self-sufficient individual at a time.</h2>
+    <p>SELFLESS exists to empower people with the tools and resources to stand on their own &mdash; through financial need&#8209;based programs rooted in education and self-improvement. It really does begin with &ldquo;self.&rdquo;</p>
+  </div>
+</section>
+
+<section class="values" id="about">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">What We Believe In</div>
+      <h2>Vision, mission, and the values spelled into our name.</h2>
+    </div>
+    <div class="values-layout">
+      <div class="acrostic">
+        <div class="letter-row"><span class="letter">S</span><span class="word">Support</span></div>
+        <div class="letter-row"><span class="letter">E</span><span class="word">Efforts</span></div>
+        <div class="letter-row"><span class="letter">L</span><span class="word">Lead</span></div>
+        <div class="letter-row"><span class="letter">F</span><span class="word">Families</span></div>
+        <div class="letter-row"><span class="letter">L</span><span class="word">Lifelong</span></div>
+        <div class="letter-row"><span class="letter">E</span><span class="word">Empowerment</span></div>
+        <div class="letter-row"><span class="letter">S</span><span class="word">Self-sufficiency</span></div>
+      </div>
+      <div class="belief-grid">
+        <div class="belief-item">
+          <img src="https://selfless-ce.web.app/images/vision.png" alt="">
+          <h3>Our Vision</h3>
+          <p>Nurturing resilient minds to empower families and individuals toward long-lasting self-sufficiency.</p>
+        </div>
+        <div class="belief-item">
+          <img src="https://selfless-ce.web.app/images/mision.png" alt="">
+          <h3>Our Mission</h3>
+          <p>Equipping people with the tools and resources to become self-sufficient, offered through our financial need-based programs.</p>
+        </div>
+        <div class="belief-item">
+          <img src="https://selfless-ce.web.app/images/goals.png" alt="">
+          <h3>Our Goals</h3>
+          <ul>
+            <li>Improve lives</li>
+            <li>Empower individuals</li>
+            <li>Build stronger communities</li>
+            <li>Promote education &amp; self-improvement</li>
+          </ul>
+        </div>
+        <div class="belief-item">
+          <img src="https://selfless-ce.web.app/images/values.png" alt="">
+          <h3>Why the Acrostic</h3>
+          <p>Every letter of SELFLESS names a value we build programs around &mdash; a compass for how we serve.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="centers" id="centers">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Our Center</div>
+      <h2>Mbale Tech Center.</h2>
+      <p>A dedicated space giving Mbale students access to computers, internet, and a quiet place to study &mdash; run locally, for the local community.</p>
+    </div>
+  </div>
+  <div class="center-grid" style="grid-template-columns:1fr;max-width:1120px;margin:0 auto;">
+    <div class="center-card" style="padding:0;display:grid;grid-template-columns:1fr 1fr;gap:0;">
+      <div class="thumb" style="height:auto;margin:0;">
+        <img src="https://selfless-ce.web.app/images/mbale-center.jpeg" alt="Mbale Tech Center" style="height:100%;">
+      </div>
+      <div style="padding:32px 36px;">
+        <h3 style="font-size:22px;">Mbale Tech Center</h3>
+        <dl style="margin-top:18px;font-size:15px;">
+          <dt>Location&nbsp;</dt><dd>Mbale</dd><br>
+          <dt>Contact&nbsp;</dt><dd>+256 782 345 6789</dd><br>
+          <dt>Office Manager&nbsp;</dt><dd>Kevin Wangoda</dd>
+        </dl>
+        <p style="color:rgba(247,243,234,0.75);font-size:14.5px;line-height:1.7;margin-top:18px;">
+          Kevin oversees day-to-day operations at the Mbale center &mdash; supporting students through
+          program applications, technology access, and connecting them with the wider Selfless CE community.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="programs" id="programs">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Find a Program for You</div>
+      <h2>Our Programs</h2>
+      <p>We ask every participant to be diligent in improving their own life first, so they're equipped to dedicate time, talent, and energy to helping others in turn.</p>
+    </div>
+    <div class="program-grid">
+      <div class="program-card">
+        <div class="deadline">Deadline: November 20</div>
+        <h3>College Assistance Program</h3>
+        <p>Tuition for qualifying individuals plus a weekly stipend to support a smooth path through school, with rewards for outstanding performance.</p>
+        <div class="tag-row"><span class="tag">Tuition Support</span><span class="tag">Weekly Stipend</span><span class="tag">Performance Rewards</span></div>
+        <a href="https://selfless-ce.web.app/CAP-aplication.html" class="btn btn-gold">Apply Now</a>
+      </div>
+      <div class="program-card">
+        <div class="deadline">Deadline: December 20</div>
+        <h3>Missionary Assistance Program</h3>
+        <p>Financial assistance for young men and women preparing to serve full-time missions for The Church of Jesus Christ of Latter-day Saints.</p>
+        <div class="tag-row"><span class="tag">Mission Support</span><span class="tag">Church Service</span><span class="tag">Spiritual Growth</span></div>
+        <a href="#contact" class="btn btn-gold">Apply Now</a>
+      </div>
+      <div class="program-card">
+        <div class="deadline">Deadline: December 20</div>
+        <h3>Temple Attendance Assistance</h3>
+        <p>Financial assistance for members of The Church of Jesus Christ of Latter-day Saints attending the temple for spiritual nourishment.</p>
+        <div class="tag-row"><span class="tag">Temple Visit</span><span class="tag">Spiritual Support</span><span class="tag">Financial Aid</span></div>
+        <a href="#contact" class="btn btn-gold">Apply Now</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Questions</div>
+      <h2>Frequently Asked Questions</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item" open>
+        <summary>What is Selfless CE?</summary>
+        <p>A non-profit that helps young single adults become self-sufficient through online education with BYU Pathway Worldwide, paired with self-improvement. Education and self-improvement are the keys &mdash; SELFLESS really does begin with &ldquo;self.&rdquo;</p>
+      </details>
+      <details class="faq-item">
+        <summary>How can I join?</summary>
+        <p>Selfless is open to young single adults ages 18&ndash;30 willing to learn and grow through BYU Pathway Worldwide online education and self-improvement. Join by filling out the application form on this site.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What are the benefits of joining?</summary>
+        <p>Tuition support for qualifying individuals, a weekly stipend to help students through the school term, and rewards for outstanding and best-performing students.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What are the registration requirements?</summary>
+        <p>Joining is free. You must be a member of The Church of Jesus Christ of Latter-day Saints, or a close friend of Selfless members, and maintain a high standard of conduct.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="gallery" id="gallery">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="eyebrow">Gallery</div>
+      <h2>Our Moments</h2>
+    </div>
+    <div class="gallery-grid">
+      <a href="https://selfless-ce.web.app/images/hero-image.jpeg"><img src="https://selfless-ce.web.app/images/hero-image.jpeg" alt="Volunteers and students"></a>
+      <a href="https://selfless-ce.web.app/images/celebrations1.jpeg"><img src="https://selfless-ce.web.app/images/celebrations1.jpeg" alt="Student activities"></a>
+      <a href="https://selfless-ce.web.app/images/graduation.jpeg"><img src="https://selfless-ce.web.app/images/graduation.jpeg" alt="Graduation"></a>
+      <a href="https://selfless-ce.web.app/images/networking.jpeg"><img src="https://selfless-ce.web.app/images/networking.jpeg" alt="Networking event"></a>
+      <a href="https://selfless-ce.web.app/images/temple-trip.jpeg"><img src="https://selfless-ce.web.app/images/temple-trip.jpeg" alt="Temple trip"></a>
+      <a href="https://selfless-ce.web.app/images/art.jpeg"><img src="https://selfless-ce.web.app/images/art.jpeg" alt="Arts activities"></a>
+      <a href="https://selfless-ce.web.app/images/celebrations2.jpeg"><img src="https://selfless-ce.web.app/images/celebrations2.jpeg" alt="Community event"></a>
+    </div>
+  </div>
+</section>
+
+<footer id="contact">
+  <div class="contact-band">
+    <div class="wrap">
+      <div class="contact-grid">
+        <div>
+          <div class="eyebrow" style="color:var(--gold-light);">Get in Touch</div>
+          <h2>Contact the Mbale Center</h2>
+          <p>Mbale, Uganda. Reach out to Office Manager Kevin Wangoda about programs, technology access, or visiting the center.</p>
+          <div class="contact-detail">
+            <div class="row"><img src="https://selfless-ce.web.app/images/telephone.png" alt=""> <a href="tel:+256782345789">+256 782 345 6789</a></div>
+            <div class="row"><img src="https://selfless-ce.web.app/images/gmail.png" alt=""> <a href="mailto:admin@selfless-ce.org">admin@selfless-ce.org</a></div>
+            <div class="row"><span class="eyebrow" style="color:var(--gold-light);font-size:11px;">Office Manager&nbsp;&nbsp;</span> Kevin Wangoda</div>
+          </div>
+        </div>
+        <form class="contact-form" onsubmit="event.preventDefault();">
+          <label for="name">Name</label>
+          <input id="name" type="text" placeholder="Your full name">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@example.com">
+          <label for="msg">Message</label>
+          <textarea id="msg" rows="4" placeholder="How can we help?"></textarea>
+          <button type="submit" class="btn btn-gold" style="width:100%;">Send Message</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <div class="wrap">
+      <span>&copy; Selfless CE Mbale Tech Center. All rights reserved.</span>
+      <span><a href="portal.html" style="color:rgba(247,243,234,0.7);">Student/Tutor Login</a> &nbsp;·&nbsp; Making a difference in Mbale.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- AI Chat Widget -->
+<div id="sce-chat-bubble" aria-label="Open chat assistant">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#C99A3E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+  </svg>
+</div>
+
+<div id="sce-chat-panel">
+  <div class="sce-chat-head">
+    <div>
+      <div class="title">Selfless CE Assistant</div>
+      <div class="sub">Ask me anything</div>
+    </div>
+    <button id="sce-chat-close" aria-label="Close chat">&times;</button>
+  </div>
+  <div class="sce-chat-body" id="sce-chat-body">
+    <div class="sce-msg bot">Hi! I'm the Selfless CE assistant. Ask me about our programs, the Mbale Tech Center, or anything else.</div>
+  </div>
+  <div class="sce-chat-foot">
+    <input id="sce-chat-input" type="text" placeholder="Type a message..." autocomplete="off">
+    <button id="sce-chat-send">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Replace with your deployed Worker URL (see README "AI Assistant Setup").
+  const CHAT_ENDPOINT = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+
+  const bubble = document.getElementById('sce-chat-bubble');
+  const panel = document.getElementById('sce-chat-panel');
+  const closeBtn = document.getElementById('sce-chat-close');
+  const body = document.getElementById('sce-chat-body');
+  const input = document.getElementById('sce-chat-input');
+  const sendBtn = document.getElementById('sce-chat-send');
+
+  let history = [];
+
+  bubble.addEventListener('click', () => {
+    panel.classList.add('open');
+    input.focus();
+  });
+  closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+
+  function addMessage(text, cls){
+    const div = document.createElement('div');
+    div.className = 'sce-msg ' + cls;
+    div.textContent = text;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+    return div;
+  }
+
+  async function sendMessage(){
+    const text = input.value.trim();
+    if(!text) return;
+    if(CHAT_ENDPOINT.includes('YOUR-WORKER-SUBDOMAIN')){
+      addMessage(text, 'user');
+      addMessage("The assistant isn't connected yet — the site owner needs to deploy the backend and set CHAT_ENDPOINT (see README).", 'bot');
+      input.value = '';
+      return;
+    }
+    addMessage(text, 'user');
+    history.push({ role: 'user', content: text });
+    input.value = '';
+    sendBtn.disabled = true;
+    const typingEl = addMessage('Typing...', 'typing bot');
+
+    try {
+      const resp = await fetch(CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history })
+      });
+      const data = await resp.json();
+      typingEl.remove();
+      const reply = data.reply || "Sorry, something went wrong.";
+      addMessage(reply, 'bot');
+      history.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      typingEl.remove();
+      addMessage("Sorry, I couldn't reach the assistant. Please try again.", 'bot');
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', (e) => { if(e.key === 'Enter') sendMessage(); });
+})();
+</script>
+
+</body>
+</html>

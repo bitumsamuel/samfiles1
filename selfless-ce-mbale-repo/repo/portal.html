@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selfless CE — My Payments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0E2340; --navy-mid:#173A63; --navy-line:#2A4E7C;
+    --cream:#F7F3EA; --cream-2:#EFE8D8; --gold:#C99A3E; --gold-light:#E4C784;
+    --ink:#1B2430; --ink-soft:#4B5568;
+    --ok:#2E7D4F; --warn:#B8862F; --err:#B4362E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Work Sans',sans-serif;background:var(--cream);color:var(--ink);}
+  h1,h2{font-family:'Fraunces',serif;font-weight:600;color:var(--navy-deep);margin:0;}
+  .wrap{max-width:720px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy-deep);padding:22px 0;}
+  header .wrap{display:flex;justify-content:space-between;align-items:center;}
+  header h1{color:var(--cream);font-size:20px;}
+  #logout{background:none;border:1px solid rgba(247,243,234,0.4);color:var(--cream);padding:8px 14px;border-radius:2px;cursor:pointer;font-size:13px;display:none;}
+
+  #login-view{max-width:380px;margin:90px auto;padding:36px;background:#fff;border:1px solid var(--cream-2);}
+  #login-view h2{font-size:22px;margin-bottom:6px;}
+  #login-view p{color:var(--ink-soft);font-size:13.5px;margin-bottom:22px;}
+  label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);display:block;margin-bottom:6px;}
+  input{width:100%;padding:11px 13px;border:1px solid var(--cream-2);font-family:inherit;font-size:14px;margin-bottom:16px;border-radius:2px;}
+  button.primary{background:var(--gold);color:var(--navy-deep);border:none;padding:12px 20px;font-weight:600;font-size:14px;cursor:pointer;border-radius:2px;width:100%;}
+  .error{color:var(--err);font-size:13px;margin-top:-8px;margin-bottom:14px;}
+
+  main{display:none;padding:36px 0 80px;}
+  .welcome{font-size:15px;color:var(--ink-soft);margin-bottom:24px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--cream-2);}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--cream-2);}
+  th{color:var(--ink-soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;}
+  .badge{padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;}
+  .badge.pending{background:#F0E5CE;color:var(--warn);}
+  .badge.processing{background:#DDE8F5;color:var(--navy-mid);}
+  .badge.paid{background:#DCEFDF;color:var(--ok);}
+  .badge.failed{background:#F5DEDC;color:var(--err);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Selfless CE — My Payments</h1>
+    <button id="logout">Log out</button>
+  </div>
+</header>
+
+<div id="login-view">
+  <h2>Sign In</h2>
+  <p>View your stipend or tutor payment history.</p>
+  <label>Email</label>
+  <input id="login-email" type="email">
+  <label>Password</label>
+  <input id="login-password" type="password">
+  <div class="error" id="login-error" style="display:none;"></div>
+  <button class="primary" id="login-btn">Sign In</button>
+</div>
+
+<main id="main">
+  <div class="wrap">
+    <div class="welcome" id="welcome"></div>
+    <table>
+      <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th><th>Note</th></tr></thead>
+      <tbody id="payments-table"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  const API = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+  let token = localStorage.getItem('sce_portal_token') || null;
+
+  const loginView = document.getElementById('login-view');
+  const main = document.getElementById('main');
+  const logoutBtn = document.getElementById('logout');
+
+  async function showApp(){
+    loginView.style.display = 'none';
+    main.style.display = 'block';
+    logoutBtn.style.display = 'inline-block';
+    const me = await authed('/api/me');
+    document.getElementById('welcome').textContent = `Welcome, ${me.name} (${me.role})`;
+    loadPayments();
+  }
+
+  if(token){ showApp(); }
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try{
+      const res = await fetch(`${API}/api/auth/login`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({email, password})
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Login failed');
+      if(data.role === 'admin') throw new Error('Admins should use the admin dashboard.');
+      token = data.token;
+      localStorage.setItem('sce_portal_token', token);
+      showApp();
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('sce_portal_token');
+    location.reload();
+  });
+
+  async function authed(path){
+    const res = await fetch(`${API}${path}`, { headers:{ 'Authorization': `Bearer ${token}` } });
+    if(res.status === 401){ localStorage.removeItem('sce_portal_token'); location.reload(); }
+    return res.json();
+  }
+
+  async function loadPayments(){
+    const data = await authed('/api/me/payments');
+    const rows = (data.payments || []).map(p => `
+      <tr>
+        <td>${new Date(p.created_at).toLocaleDateString()}</td>
+        <td>${p.amount.toLocaleString()} ${p.currency}</td>
+        <td>${p.method === 'momo' ? 'MTN MoMo' : 'Bank'}</td>
+        <td><span class="badge ${p.status}">${p.status}</span></td>
+        <td>${p.note || ''}</td>
+      </tr>`).join('');
+    document.getElementById('payments-table').innerHTML = rows || '<tr><td colspan="5">No payments yet.</td></tr>';
+  }
+</script>
+</body>
+</html>
