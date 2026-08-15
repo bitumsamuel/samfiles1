@@ -1,15 +1,21 @@
 # Selfless CE Mbale Tech Center
 
-A one-page site for the Selfless CE Mbale Tech Center, built in the navy visual style of [selfless-ce.web.app](https://selfless-ce.web.app/).
+A site + backend for the Selfless CE Mbale Tech Center: a public one-page site, an
+admin dashboard, and a student/tutor portal for duty tracking and attendance.
+
+**Note:** the finance/stipend payment system (MTN MoMo disbursements) has been
+removed as of this version. This is now a login + duty tracking + attendance system only.
 
 ## Contents
-- Hero + mission
-- Vision / Mission / Values (SELFLESS acrostic) / Goals
-- Mbale center spotlight (Office Manager: Kevin Wangoda)
-- Programs: CAP, MAP, TAA
-- FAQ
-- Gallery
-- Contact
+
+- `index.html` — public site (with an AI chat bubble)
+- `admin.html` — admin dashboard: approve signups, manage people, assign/track duties, mark attendance
+- `portal.html` — student/tutor portal: My Duties, My Attendance (installable as a phone app — see below)
+- `worker.js` — Cloudflare Worker backend (auth, duties, attendance, chat)
+- `schema.sql` — database schema for a fresh setup
+- `migration_002_approved.sql` — adds account-approval support (only needed if you set up the DB before this feature existed)
+- `migration_003_remove_payments.sql` — removes the old payments table/columns (only needed if you had the finance version running before)
+- `manifest.json`, `service-worker.js`, `icons/` — make `portal.html` installable as an app
 
 ## Run locally
 Just open `index.html` in a browser — no build step required.
@@ -20,109 +26,32 @@ Just open `index.html` in a browser — no build step required.
 3. Under "Build and deployment", set Source to `main` branch, `/ (root)` folder
 4. Save — your site will be live at `https://<username>.github.io/<repo-name>/`
 
-## AI Assistant Setup
+## Backend Setup (Cloudflare Worker + D1)
 
-The site includes a floating chat bubble (bottom-right) connected to an AI assistant.
-Because API keys can't be safely stored in a public website's code, the chat widget
-talks to a small backend (`worker.js`) that keeps your Anthropic API key secret.
-This backend runs free on Cloudflare Workers.
-
-### 1. Get an Anthropic API key
-Sign up at [console.anthropic.com](https://console.anthropic.com), create an API key
-under **Settings → API Keys**.
-
-### 2. Deploy the Worker
-```bash
-npm install -g wrangler
-wrangler login
-
-# From this repo's folder:
-wrangler deploy worker.js --name selfless-ce-assistant
-
-# Set your API key as a secret (you'll be prompted to paste it):
-wrangler secret put ANTHROPIC_API_KEY --name selfless-ce-assistant
-```
-
-Wrangler will print a URL like `https://selfless-ce-assistant.<your-subdomain>.workers.dev`.
-
-### 3. Connect the widget to your Worker
-Open `index.html`, find this line near the bottom (inside the `<script>` tag):
-
-```js
-const CHAT_ENDPOINT = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
-```
-
-Replace it with the URL from step 2, commit, and push. The chat bubble will now
-answer visitor questions live.
-
-### 4. (Recommended) Lock down CORS
-In `worker.js`, change:
-```js
-const ALLOWED_ORIGIN = "*";
-```
-to your actual site URL, e.g. `"https://yourusername.github.io"`, so only your
-site can call the assistant.
-
-**Cost note:** Cloudflare Workers' free tier covers 100,000 requests/day. Anthropic
-API usage is billed separately per token — check current pricing at
-[anthropic.com/pricing](https://www.anthropic.com/pricing).
-
-## Finance Tracker (Stipends & Tutor Payments)
-
-`admin.html` and `portal.html` add a login-protected system for paying students/tutors
-via **MTN Mobile Money** (automated) or **bank transfer** (logged manually), and letting
-each person see their own payment history.
-
-**⚠️ Security & Compliance — read before going live**
-This handles real money and people's personal financial details (phone numbers, bank
-accounts). Before using it with real disbursements:
-- Get your own legal/compliance review — in Uganda this likely touches the
-  **Data Protection and Privacy Act (2019)** and Bank of Uganda rules around payment
-  service providers. A nonprofit disbursing stipends is usually fine, but confirm with
-  a lawyer familiar with Ugandan fintech regulation.
-- **Never** share your MTN MoMo API keys, subscription key, or JWT secret with anyone,
-  including in chat, screenshots, or public repos. They only ever go into Wrangler secrets.
-- Test everything in the MTN MoMo **sandbox** environment first (`MOMO_BASE_URL =
-  https://sandbox.momodeveloper.mtn.com`, `X-Target-Environment = sandbox`) before
-  switching to production.
-- MTN requires your server's **IP to be whitelisted** for Disbursement API calls —
-  contact your MTN MoMo account rep to whitelist your Cloudflare Worker's outbound IP
-  (or use a static-IP proxy if needed).
-- Consider a second admin approval step before large payouts (this build lets any
-  admin trigger a payment solo — add a review step if you want more control).
-
-### 1. Create the database
+### 1. Create the database (skip if you already have one)
 ```bash
 wrangler d1 create selfless_finance
 ```
-Copy the `database_id` it prints into `wrangler.toml`.
+Copy the `database_id` into `wrangler.toml`.
 
 Load the schema:
 ```bash
-wrangler d1 execute selfless_finance --file=./schema.sql
+wrangler d1 execute selfless_finance --file=./schema.sql --remote
 ```
+
+**If you're upgrading from an earlier version of this project**, run whichever
+migrations apply instead of/in addition to the schema:
+```bash
+wrangler d1 execute selfless_finance --file=./migration_002_approved.sql --remote
+wrangler d1 execute selfless_finance --file=./migration_003_remove_payments.sql --remote
+```
+`migration_003` **permanently deletes** all payment records — there's no undo.
 
 ### 2. Set secrets
 ```bash
 wrangler secret put JWT_SECRET
-# paste any long random string, e.g. output of: openssl rand -hex 32
-
 wrangler secret put ANTHROPIC_API_KEY
-# (only needed if you haven't already set this for the chat assistant)
-
-wrangler secret put MOMO_DISBURSEMENT_API_USER
-wrangler secret put MOMO_DISBURSEMENT_API_KEY
-wrangler secret put MOMO_DISBURSEMENT_SUBSCRIPTION_KEY
-```
-
-Then add these as plain vars in `wrangler.toml` (not secret, but still don't commit
-production values to a public repo — keep this repo private or use `wrangler.toml`
-locally only):
-```toml
-[vars]
-MOMO_BASE_URL = "https://sandbox.momodeveloper.mtn.com"   # switch to proxy.momoapi.mtn.com in production
-MOMO_TARGET_ENVIRONMENT = "sandbox"                          # or "mtnuganda" in production
-MOMO_CALLBACK_URL = "https://your-worker-subdomain.workers.dev/momo-callback"
+wrangler secret put BOOTSTRAP_KEY
 ```
 
 ### 3. Deploy
@@ -131,28 +60,68 @@ wrangler deploy worker.js --name selfless-ce-backend
 ```
 
 ### 4. Create your first admin account
-Set a one-time bootstrap key, then call the bootstrap route once:
 ```bash
-wrangler secret put BOOTSTRAP_KEY
-# paste any random string, e.g. output of: openssl rand -hex 16
-
 curl -X POST https://your-worker-subdomain.workers.dev/api/bootstrap-admin \
   -H "Content-Type: application/json" \
-  -d '{"bootstrapKey":"THE_KEY_YOU_JUST_SET","name":"Your Name","email":"you@selfless-ce.org","password":"choose-a-strong-password"}'
+  -d '{"bootstrapKey":"THE_KEY_YOU_SET","name":"Your Name","email":"you@selfless-ce.org","password":"choose-a-strong-password"}'
 ```
-It only works once (it refuses if an admin already exists). After this, log in at
-`admin.html` with that email/password — and consider rotating `BOOTSTRAP_KEY` to
-something else afterward for extra safety.
+Only works once (refuses if an admin already exists).
 
-### 5. Connect the frontend pages
-In both `admin.html` and `portal.html`, replace:
+### 5. Connect the frontend
+In `index.html`, `admin.html`, and `portal.html`, set:
 ```js
-const API = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+const API = "https://your-worker-subdomain.workers.dev"; // (index.html calls this CHAT_ENDPOINT)
 ```
-with your deployed Worker URL from step 3, then commit and push.
 
-Your dashboards will be live at:
-- `https://<username>.github.io/<repo-name>/admin.html`
-- `https://<username>.github.io/<repo-name>/portal.html`
+## How People Get Access
 
+- **Admin-created accounts**: in `admin.html`, under "Add Student or Tutor" — active immediately
+- **Self-signup**: from `portal.html`'s login screen, click "Create an account" — goes into a
+  **pending** queue until an admin approves it under "Pending Approvals" in `admin.html`
+- **Password reset**: admin clicks "Reset Password" next to anyone in the People table,
+  sets a new one, and shares it with them directly (no email step)
 
+## Duty Tracking
+
+- **Admin**: assign a duty (student, title, description, due date, priority), and browse/filter
+  all duties by status or student in "Duty Overview"
+- **Student**: "My Duties" shows a card list; tapping a duty opens details, lets them attach a
+  proof-of-completion photo, and mark it complete
+- Photos are stored as base64 text directly in the database, capped at ~1.5MB each. Fine for a
+  small center; if it grows large, moving to **Cloudflare R2** (object storage) would scale better
+
+## Attendance Tracking
+
+- **Admin**: pick a student + date, mark Present / Late / Absent, optional note. Re-marking the
+  same student/date updates the existing record instead of duplicating it
+- **Student**: "My Attendance" shows their own history
+
+## Turning the Student Portal into a Phone App (APK)
+
+`portal.html` is set up as a **Progressive Web App (PWA)** — it has a manifest, icons, and a
+service worker, so phones can install it like a real app. To get an actual `.apk` file:
+
+### Option A — Add to Home Screen (no APK needed)
+On Android, opening `portal.html` in Chrome shows an "Install app" / "Add to Home Screen"
+prompt. This creates a real app icon and launches full-screen, no browser chrome. Simplest
+option, works immediately once the site is live — no extra tools needed.
+
+### Option B — Generate a real .apk with PWABuilder
+1. Make sure your site is live (e.g. via GitHub Pages) at a public HTTPS URL
+2. Go to **[pwabuilder.com](https://www.pwabuilder.com)**
+3. Enter your portal URL, e.g. `https://yourusername.github.io/yourrepo/portal.html`
+4. PWABuilder scores your PWA and lets you download an **Android package** — this produces
+   a real, installable `.apk` (or `.aab` for Play Store submission)
+5. Share the `.apk` directly with students (e.g. via WhatsApp) for manual install, or follow
+   PWABuilder's guide to publish it on the Play Store
+
+This is a standard, widely-used path for small teams to ship a real Android app without
+maintaining native Android code.
+
+## Security Notes
+
+- Passwords are hashed with PBKDF2 (100,000 iterations) — never stored in plain text
+- Sessions use signed JWTs, 12-hour expiry
+- Only admins can create accounts directly or approve self-signups
+- Consider tightening CORS in `worker.js` (`ALLOWED_ORIGIN`) to your exact site URL once
+  everything is live, instead of `"*"`

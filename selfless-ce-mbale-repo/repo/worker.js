@@ -1,10 +1,10 @@
 /**
  * Selfless CE — Backend Worker
- * Handles: AI chat assistant, login, and the student/tutor finance tracker
- * (including real MTN MoMo disbursements). Deploy + setup steps are in README.md.
+ * Handles: AI chat assistant, login/signup (with admin approval), password reset,
+ * duty tracking, and attendance tracking.
  *
- * This moves real money and stores real people's financial details.
- * Read the "Security & Compliance" section of README.md before going live.
+ * Payments/MTN MoMo support has been removed — this Worker only manages people,
+ * duties, and attendance now.
  */
 
 const ALLOWED_ORIGIN = "*"; // Production: replace with your exact site URL.
@@ -82,81 +82,14 @@ async function requireAuth(request, env, roles) {
   return payload; // { id, role, name, email, exp }
 }
 
-/* ---------------- MTN MoMo disbursement ---------------- */
-
-async function momoDisburse(env, { amount, currency, phone, externalId, note }) {
-  const tokenResp = await fetch(`${env.MOMO_BASE_URL}/disbursement/token/`, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${env.MOMO_DISBURSEMENT_API_USER}:${env.MOMO_DISBURSEMENT_API_KEY}`),
-      "Ocp-Apim-Subscription-Key": env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
-      "X-Target-Environment": env.MOMO_TARGET_ENVIRONMENT,
-    },
-  });
-  if (!tokenResp.ok) {
-    const t = await tokenResp.text();
-    throw new Error("MoMo token request failed: " + t);
-  }
-  const { access_token } = await tokenResp.json();
-  const referenceId = crypto.randomUUID();
-
-  const transferResp = await fetch(`${env.MOMO_BASE_URL}/disbursement/v1_0/transfer`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${access_token}`,
-      "Ocp-Apim-Subscription-Key": env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
-      "X-Reference-Id": referenceId,
-      "X-Target-Environment": env.MOMO_TARGET_ENVIRONMENT,
-      ...(env.MOMO_CALLBACK_URL ? { "X-Callback-Url": env.MOMO_CALLBACK_URL } : {}),
-    },
-    body: JSON.stringify({
-      amount: String(amount),
-      currency,
-      externalId,
-      payee: { partyIdType: "MSISDN", partyId: phone },
-      payerMessage: note || "Selfless CE payment",
-      payeeNote: note || "Selfless CE payment",
-    }),
-  });
-
-  // MTN returns 202 Accepted with no body when the transfer request is accepted;
-  // the real result arrives async via callback or by polling the reference ID.
-  if (transferResp.status !== 202) {
-    const t = await transferResp.text();
-    throw new Error(`MoMo transfer request failed (${transferResp.status}): ${t}`);
-  }
-  return { referenceId, status: "processing" };
-}
-
-async function momoCheckStatus(env, referenceId) {
-  const tokenResp = await fetch(`${env.MOMO_BASE_URL}/disbursement/token/`, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${env.MOMO_DISBURSEMENT_API_USER}:${env.MOMO_DISBURSEMENT_API_KEY}`),
-      "Ocp-Apim-Subscription-Key": env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
-      "X-Target-Environment": env.MOMO_TARGET_ENVIRONMENT,
-    },
-  });
-  const { access_token } = await tokenResp.json();
-  const statusResp = await fetch(`${env.MOMO_BASE_URL}/disbursement/v1_0/transfer/${referenceId}`, {
-    headers: {
-      Authorization: `Bearer ${access_token}`,
-      "Ocp-Apim-Subscription-Key": env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
-      "X-Target-Environment": env.MOMO_TARGET_ENVIRONMENT,
-    },
-  });
-  return statusResp.json(); // { status: "SUCCESSFUL" | "FAILED" | "PENDING", ... }
-}
-
-/* ---------------- chat assistant (unchanged behaviour) ---------------- */
+/* ---------------- chat assistant ---------------- */
 
 const SYSTEM_PROMPT = `You are the friendly AI assistant for Selfless CE, a nonprofit in Uganda
 that helps young adults become self-sufficient through education (BYU Pathway Worldwide),
 mentorship, and technology access. Programs: College Assistance Program (CAP), Missionary
 Assistance Program (MAP), Temple Attendance Assistance (TAA). The Mbale Tech Center is
 managed by Kevin Wangoda. Be warm, concise, and honest when you don't know something —
-point visitors to the Contact form for specifics like exact balances or payment status.`;
+point visitors to the Contact form for specifics.`;
 
 async function handleChat(request, env) {
   const { messages } = await request.json();
@@ -195,28 +128,40 @@ export default {
     const path = url.pathname;
 
     try {
-      // Existing chat assistant
+      // Chat assistant
       if (path === "/" || path === "/chat") {
         if (request.method !== "POST") return json({ error: "Not found" }, 404);
         return await handleChat(request, env);
       }
 
-      // One-time setup route: creates the first admin account. Guarded by a secret
-      // key you set once via `wrangler secret put BOOTSTRAP_KEY`, then delete this
-      // block (or just stop using it) once your admin account exists.
+      // ---- One-time bootstrap: creates the first admin account ----
       if (path === "/api/bootstrap-admin" && request.method === "POST") {
         const b = await request.json();
-        if (!env.BOOTSTRAP_KEY || b.bootstrapKey !== env.BOOTSTRAP_KEY) {
-          return json({ error: "Unauthorized" }, 401);
-        }
+        if (!env.BOOTSTRAP_KEY || b.bootstrapKey !== env.BOOTSTRAP_KEY) return json({ error: "Unauthorized" }, 401);
         const existing = await env.DB.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").first();
         if (existing) return json({ error: "An admin already exists." }, 400);
         const salt = crypto.randomUUID();
         const hash = await hashPassword(b.password, salt);
         const res = await env.DB.prepare(
-          `INSERT INTO users (role, name, email, password_hash, password_salt) VALUES ('admin', ?, ?, ?, ?)`
+          `INSERT INTO users (role, name, email, password_hash, password_salt, approved) VALUES ('admin', ?, ?, ?, ?, 1)`
         ).bind(b.name, b.email, hash, salt).run();
         return json({ id: res.meta.last_row_id, message: "Admin created. You can now log in." });
+      }
+
+      // ---- Public: self-signup (goes into a pending queue) ----
+      if (path === "/api/auth/signup" && request.method === "POST") {
+        const b = await request.json();
+        if (!b.name || !b.email || !b.password || !["student", "tutor"].includes(b.role)) {
+          return json({ error: "Name, email, password, and a valid role (student or tutor) are required." }, 400);
+        }
+        const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(b.email).first();
+        if (existing) return json({ error: "An account with this email already exists." }, 400);
+        const salt = crypto.randomUUID();
+        const hash = await hashPassword(b.password, salt);
+        await env.DB.prepare(
+          `INSERT INTO users (role, name, email, phone, password_hash, password_salt, approved) VALUES (?, ?, ?, ?, ?, ?, 0)`
+        ).bind(b.role, b.name, b.email, b.phone || null, hash, salt).run();
+        return json({ message: "Account created. An admin needs to approve it before you can log in." });
       }
 
       // ---- Auth ----
@@ -226,8 +171,49 @@ export default {
         if (!user) return json({ error: "Invalid email or password" }, 401);
         const hash = await hashPassword(password, user.password_salt);
         if (hash !== user.password_hash) return json({ error: "Invalid email or password" }, 401);
+        if (!user.approved) return json({ error: "Your account is pending admin approval." }, 403);
         const token = await signJWT({ id: user.id, role: user.role, name: user.name, email: user.email }, env.JWT_SECRET);
         return json({ token, role: user.role, name: user.name, id: user.id });
+      }
+
+      // ---- Admin: pending signups ----
+      if (path === "/api/admin/users/pending" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          "SELECT id, role, name, email, phone, created_at FROM users WHERE approved = 0 ORDER BY created_at ASC"
+        ).all();
+        return json({ users: results });
+      }
+
+      const approveMatch = path.match(/^\/api\/admin\/users\/(\d+)\/approve$/);
+      if (approveMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(approveMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      const rejectMatch = path.match(/^\/api\/admin\/users\/(\d+)\/reject$/);
+      if (rejectMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("DELETE FROM users WHERE id = ? AND approved = 0").bind(rejectMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      // ---- Admin: reset a user's password ----
+      const resetMatch = path.match(/^\/api\/admin\/users\/(\d+)\/reset-password$/);
+      if (resetMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.password || b.password.length < 6) return json({ error: "New password must be at least 6 characters." }, 400);
+        const salt = crypto.randomUUID();
+        const hash = await hashPassword(b.password, salt);
+        await env.DB.prepare("UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?")
+          .bind(hash, salt, resetMatch[1]).run();
+        return json({ ok: true });
       }
 
       // ---- Admin: manage users (students/tutors) ----
@@ -238,9 +224,8 @@ export default {
         const salt = crypto.randomUUID();
         const hash = await hashPassword(b.password, salt);
         const res = await env.DB.prepare(
-          `INSERT INTO users (role, name, email, phone, momo_number, bank_name, bank_account, password_hash, password_salt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(b.role, b.name, b.email, b.phone || null, b.momo_number || null, b.bank_name || null, b.bank_account || null, hash, salt).run();
+          `INSERT INTO users (role, name, email, phone, password_hash, password_salt, approved) VALUES (?, ?, ?, ?, ?, ?, 1)`
+        ).bind(b.role, b.name, b.email, b.phone || null, hash, salt).run();
         return json({ id: res.meta.last_row_id });
       }
 
@@ -248,101 +233,124 @@ export default {
         const auth = await requireAuth(request, env, ["admin"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          "SELECT id, role, name, email, phone, momo_number, bank_name, bank_account FROM users WHERE role != 'admin' ORDER BY name"
+          "SELECT id, role, name, email, phone FROM users WHERE role != 'admin' AND approved = 1 ORDER BY name"
         ).all();
         return json({ users: results });
       }
 
-      // ---- Admin: payments ----
-      if (path === "/api/admin/payments" && request.method === "POST") {
+      // ---- Admin: duties ----
+      if (path === "/api/admin/duties" && request.method === "POST") {
         const auth = await requireAuth(request, env, ["admin"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const b = await request.json();
+        if (!b.student_id || !b.title || !b.due_date) return json({ error: "student_id, title, and due_date are required" }, 400);
         const res = await env.DB.prepare(
-          `INSERT INTO payments (recipient_id, recipient_type, amount, currency, method, status, note, created_by)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`
-        ).bind(b.recipient_id, b.recipient_type, b.amount, b.currency || "UGX", b.method, b.note || null, auth.id).run();
+          `INSERT INTO duties (student_id, title, description, due_date, priority, created_by)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        ).bind(b.student_id, b.title, b.description || null, b.due_date, b.priority || "standard", auth.id).run();
         return json({ id: res.meta.last_row_id });
       }
 
-      if (path === "/api/admin/payments" && request.method === "GET") {
+      if (path === "/api/admin/duties" && request.method === "GET") {
         const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const statusFilter = url.searchParams.get("status"); // pending | completed | overdue
+        const studentFilter = url.searchParams.get("student_id");
+        let query = `SELECT d.*, u.name as student_name FROM duties d JOIN users u ON u.id = d.student_id WHERE 1=1`;
+        const binds = [];
+        if (studentFilter) { query += ` AND d.student_id = ?`; binds.push(studentFilter); }
+        if (statusFilter === "completed") { query += ` AND d.status = 'completed'`; }
+        else if (statusFilter === "pending") { query += ` AND d.status = 'pending' AND d.due_date >= date('now')`; }
+        else if (statusFilter === "overdue") { query += ` AND d.status = 'pending' AND d.due_date < date('now')`; }
+        query += ` ORDER BY d.due_date ASC`;
+        const { results } = await env.DB.prepare(query).bind(...binds).all();
+        const withComputedStatus = results.map((d) => ({
+          ...d,
+          computed_status: d.status === "completed" ? "completed" : (d.due_date < new Date().toISOString().slice(0, 10) ? "overdue" : "pending"),
+        }));
+        return json({ duties: withComputedStatus });
+      }
+
+      // ---- Student: duties ----
+      if (path === "/api/me/duties" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          `SELECT p.*, u.name as recipient_name, u.momo_number, u.bank_name, u.bank_account
-           FROM payments p JOIN users u ON u.id = p.recipient_id
-           ORDER BY p.created_at DESC`
-        ).all();
-        return json({ payments: results });
+          "SELECT id, title, description, due_date, priority, status, completed_at FROM duties WHERE student_id = ? ORDER BY due_date ASC"
+        ).bind(auth.id).all();
+        const withComputedStatus = results.map((d) => ({
+          ...d,
+          computed_status: d.status === "completed" ? "completed" : (d.due_date < new Date().toISOString().slice(0, 10) ? "overdue" : "pending"),
+        }));
+        return json({ duties: withComputedStatus });
       }
 
-      // Trigger an actual payout for a pending record
-      const payMatch = path.match(/^\/api\/admin\/payments\/(\d+)\/pay$/);
-      if (payMatch && request.method === "POST") {
-        const auth = await requireAuth(request, env, ["admin"]);
+      const dutyDetailMatch = path.match(/^\/api\/me\/duties\/(\d+)$/);
+      if (dutyDetailMatch && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
-        const id = payMatch[1];
-        const payment = await env.DB.prepare(
-          `SELECT p.*, u.momo_number, u.bank_name, u.bank_account FROM payments p JOIN users u ON u.id = p.recipient_id WHERE p.id = ?`
-        ).bind(id).first();
-        if (!payment) return json({ error: "Payment not found" }, 404);
-
-        if (payment.method === "momo") {
-          if (!payment.momo_number) return json({ error: "Recipient has no MoMo number on file" }, 400);
-          try {
-            const result = await momoDisburse(env, {
-              amount: payment.amount,
-              currency: payment.currency,
-              phone: payment.momo_number,
-              externalId: `sce-${payment.id}`,
-              note: payment.note || "Selfless CE payment",
-            });
-            await env.DB.prepare("UPDATE payments SET status = 'processing', reference = ? WHERE id = ?")
-              .bind(result.referenceId, id).run();
-            return json({ status: "processing", reference: result.referenceId });
-          } catch (err) {
-            await env.DB.prepare("UPDATE payments SET status = 'failed' WHERE id = ?").bind(id).run();
-            return json({ error: String(err) }, 502);
-          }
-        } else {
-          // Bank transfers aren't automated — admin marks as paid after doing the transfer manually.
-          const body = await request.json().catch(() => ({}));
-          await env.DB.prepare("UPDATE payments SET status = 'paid', reference = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .bind(body.reference || "manual-bank-transfer", id).run();
-          return json({ status: "paid" });
-        }
+        const duty = await env.DB.prepare("SELECT * FROM duties WHERE id = ? AND student_id = ?").bind(dutyDetailMatch[1], auth.id).first();
+        if (!duty) return json({ error: "Not found" }, 404);
+        return json({ duty });
       }
 
-      // Poll MoMo status and sync it into our DB
-      const statusMatch = path.match(/^\/api\/admin\/payments\/(\d+)\/status$/);
-      if (statusMatch && request.method === "GET") {
-        const auth = await requireAuth(request, env, ["admin"]);
+      const dutyCompleteMatch = path.match(/^\/api\/me\/duties\/(\d+)\/complete$/);
+      if (dutyCompleteMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
-        const id = statusMatch[1];
-        const payment = await env.DB.prepare("SELECT * FROM payments WHERE id = ?").bind(id).first();
-        if (!payment || !payment.reference) return json({ error: "No reference to check" }, 400);
-        const momoStatus = await momoCheckStatus(env, payment.reference);
-        const newStatus = momoStatus.status === "SUCCESSFUL" ? "paid" : momoStatus.status === "FAILED" ? "failed" : "processing";
+        const id = dutyCompleteMatch[1];
+        const b = await request.json().catch(() => ({}));
+        // photo_base64, if provided, should be a small data URL (e.g. under ~1.5MB) — D1 has a per-row size limit.
+        const duty = await env.DB.prepare("SELECT id FROM duties WHERE id = ? AND student_id = ?").bind(id, auth.id).first();
+        if (!duty) return json({ error: "Not found" }, 404);
         await env.DB.prepare(
-          `UPDATE payments SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END WHERE id = ?`
-        ).bind(newStatus, newStatus, id).run();
-        return json({ status: newStatus, raw: momoStatus });
+          "UPDATE duties SET status = 'completed', photo_base64 = COALESCE(?, photo_base64), completed_at = CURRENT_TIMESTAMP WHERE id = ?"
+        ).bind(b.photo_base64 || null, id).run();
+        return json({ status: "completed" });
       }
 
-      // ---- Student / tutor: own profile + payments ----
+      // ---- Admin: attendance ----
+      if (path === "/api/admin/attendance" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.student_id || !b.date || !b.status) return json({ error: "student_id, date, and status are required" }, 400);
+        await env.DB.prepare(
+          `INSERT INTO attendance (student_id, date, status, note, marked_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(student_id, date) DO UPDATE SET status = excluded.status, note = excluded.note, marked_by = excluded.marked_by`
+        ).bind(b.student_id, b.date, b.status, b.note || null, auth.id).run();
+        return json({ ok: true });
+      }
+
+      if (path === "/api/admin/attendance" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const studentFilter = url.searchParams.get("student_id");
+        const dateFilter = url.searchParams.get("date");
+        let query = `SELECT a.*, u.name as student_name FROM attendance a JOIN users u ON u.id = a.student_id WHERE 1=1`;
+        const binds = [];
+        if (studentFilter) { query += ` AND a.student_id = ?`; binds.push(studentFilter); }
+        if (dateFilter) { query += ` AND a.date = ?`; binds.push(dateFilter); }
+        query += ` ORDER BY a.date DESC`;
+        const { results } = await env.DB.prepare(query).bind(...binds).all();
+        return json({ attendance: results });
+      }
+
+      // ---- Student / tutor: own profile + attendance ----
       if (path === "/api/me" && request.method === "GET") {
         const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         return json({ id: auth.id, name: auth.name, email: auth.email, role: auth.role });
       }
 
-      if (path === "/api/me/payments" && request.method === "GET") {
+      if (path === "/api/me/attendance" && request.method === "GET") {
         const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          "SELECT id, amount, currency, method, status, note, created_at, paid_at FROM payments WHERE recipient_id = ? ORDER BY created_at DESC"
+          "SELECT date, status, note FROM attendance WHERE student_id = ? ORDER BY date DESC"
         ).bind(auth.id).all();
-        return json({ payments: results });
+        return json({ attendance: results });
       }
 
       return json({ error: "Not found" }, 404);

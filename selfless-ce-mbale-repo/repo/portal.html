@@ -3,9 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Selfless CE — My Payments</title>
+<title>Selfless CE — Student Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E2340">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>
   :root{
     --navy-deep:#0E2340; --navy-mid:#173A63; --navy-line:#2A4E7C;
@@ -40,54 +43,193 @@
   .badge.processing{background:#DDE8F5;color:var(--navy-mid);}
   .badge.paid{background:#DCEFDF;color:var(--ok);}
   .badge.failed{background:#F5DEDC;color:var(--err);}
+
+  #portal-tabs{display:none;}
+  .tab-btn{background:none;border:1px solid rgba(247,243,234,0.3);color:rgba(247,243,234,0.75);padding:7px 14px;font-size:12.5px;border-radius:2px;cursor:pointer;}
+  .tab-btn.active{background:var(--gold);color:var(--navy-deep);border-color:var(--gold);font-weight:600;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .duty-list{display:flex;flex-direction:column;gap:12px;}
+  .duty-card{border:1px solid var(--cream-2);background:#fff;padding:16px;cursor:pointer;}
+  .duty-card .top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .duty-card h3{font-family:'Fraunces',serif;font-size:15.5px;color:var(--navy-deep);margin:0;}
+  .duty-card .due{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+  .duty-card .due.overdue-text{color:var(--err);font-weight:600;}
+
+  #duty-detail{display:none;background:#fff;border:1px solid var(--cream-2);padding:24px;}
+  #duty-detail .back-btn{background:none;border:none;color:var(--navy-mid);font-size:13px;cursor:pointer;padding:0;margin-bottom:16px;font-weight:600;}
+  #duty-detail h2{font-size:20px;margin:12px 0 14px;}
+  .meta-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--cream-2);font-size:13.5px;}
+  .meta-row .k{color:var(--ink-soft);}
+  .meta-row .v{font-weight:600;}
+  .desc-block{margin:16px 0;font-size:14px;line-height:1.6;}
+  .upload-zone{border:1.5px dashed var(--navy-line);padding:24px 16px;text-align:center;margin:16px 0;background:var(--cream);}
+  .upload-zone p{font-size:12.5px;color:var(--ink-soft);margin:6px 0 12px;}
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap">
-    <h1>Selfless CE — My Payments</h1>
-    <button id="logout">Log out</button>
+    <h1>Selfless CE — Student Portal</h1>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <nav id="portal-tabs" style="display:none;gap:4px;">
+        <button class="tab-btn active" data-tab="duties">My Duties</button>
+        <button class="tab-btn" data-tab="attendance">My Attendance</button>
+      </nav>
+      <button id="logout">Log out</button>
+    </div>
   </div>
 </header>
 
 <div id="login-view">
   <h2>Sign In</h2>
-  <p>View your stipend or tutor payment history.</p>
+  <p>View your duties and attendance.</p>
   <label>Email</label>
   <input id="login-email" type="email">
   <label>Password</label>
   <input id="login-password" type="password">
   <div class="error" id="login-error" style="display:none;"></div>
   <button class="primary" id="login-btn">Sign In</button>
+  <p style="text-align:center;margin-top:16px;font-size:13px;">
+    New here? <a href="#" id="show-signup" style="color:var(--navy-mid);font-weight:600;">Create an account</a>
+  </p>
+</div>
+
+<div id="signup-view" style="display:none;max-width:380px;margin:90px auto;padding:36px;background:#fff;border:1px solid var(--cream-2);">
+  <h2 style="font-size:22px;margin-bottom:6px;">Create Account</h2>
+  <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:22px;">
+    An admin will need to approve your account before you can log in.
+  </p>
+  <label>Full Name</label>
+  <input id="signup-name" type="text">
+  <label>I am a</label>
+  <select id="signup-role" style="width:100%;padding:11px 13px;border:1px solid var(--cream-2);font-family:inherit;font-size:14px;margin-bottom:16px;border-radius:2px;">
+    <option value="student">Student</option>
+    <option value="tutor">Tutor</option>
+  </select>
+  <label>Email</label>
+  <input id="signup-email" type="email">
+  <label>Password</label>
+  <input id="signup-password" type="password">
+  <div class="error" id="signup-error" style="display:none;"></div>
+  <div id="signup-success" style="display:none;color:#1E6B3E;font-size:13.5px;margin-bottom:14px;"></div>
+  <button class="primary" id="signup-btn">Request Account</button>
+  <p style="text-align:center;margin-top:16px;font-size:13px;">
+    Already have an account? <a href="#" id="show-login" style="color:var(--navy-mid);font-weight:600;">Sign in</a>
+  </p>
 </div>
 
 <main id="main">
   <div class="wrap">
     <div class="welcome" id="welcome"></div>
-    <table>
-      <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th><th>Note</th></tr></thead>
-      <tbody id="payments-table"></tbody>
-    </table>
+
+    <div id="duties-panel" class="tab-panel active">
+      <div id="duty-list-view">
+        <div class="duty-list" id="duty-list"></div>
+      </div>
+      <div id="duty-detail">
+        <button class="back-btn" id="duty-back">&larr; Back to My Duties</button>
+        <span class="badge" id="dd-status"></span>
+        <h2 id="dd-title"></h2>
+        <div class="meta-row"><span class="k">Due date</span><span class="v" id="dd-due"></span></div>
+        <div class="meta-row"><span class="k">Priority</span><span class="v" id="dd-priority"></span></div>
+        <div class="desc-block" id="dd-desc"></div>
+        <div id="dd-upload-section">
+          <label style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);display:block;margin-bottom:8px;">Proof of Completion</label>
+          <div class="upload-zone">
+            <p>Upload a photo showing the finished task</p>
+            <input type="file" id="dd-photo-input" accept="image/*" style="margin-bottom:0;">
+          </div>
+        </div>
+        <button class="primary" id="dd-complete-btn">Mark Complete</button>
+      </div>
+    </div>
+
+    <div id="attendance-panel" class="tab-panel">
+      <table>
+        <thead><tr><th>Date</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody id="attendance-table"></tbody>
+      </table>
+    </div>
+
   </div>
 </main>
 
 <script>
-  const API = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+  const API = "https://selfless-ce-backend.selfless-ce-backend.workers.dev";
   let token = localStorage.getItem('sce_portal_token') || null;
 
   const loginView = document.getElementById('login-view');
+  const signupView = document.getElementById('signup-view');
   const main = document.getElementById('main');
   const logoutBtn = document.getElementById('logout');
+
+  document.getElementById('show-signup').addEventListener('click', (e) => {
+    e.preventDefault();
+    loginView.style.display = 'none';
+    signupView.style.display = 'block';
+  });
+  document.getElementById('show-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    signupView.style.display = 'none';
+    loginView.style.display = 'block';
+  });
+
+  document.getElementById('signup-btn').addEventListener('click', async () => {
+    const errEl = document.getElementById('signup-error');
+    const okEl = document.getElementById('signup-success');
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+    const body = {
+      name: document.getElementById('signup-name').value,
+      role: document.getElementById('signup-role').value,
+      email: document.getElementById('signup-email').value,
+      password: document.getElementById('signup-password').value,
+    };
+    if(!body.name || !body.email || !body.password){
+      errEl.textContent = 'Please fill in your name, email, and password.';
+      errEl.style.display = 'block';
+      return;
+    }
+    try{
+      const res = await fetch(`${API}/api/auth/signup`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Signup failed');
+      okEl.textContent = data.message || 'Account created — waiting on admin approval.';
+      okEl.style.display = 'block';
+      document.getElementById('signup-name').value = '';
+      document.getElementById('signup-email').value = '';
+      document.getElementById('signup-password').value = '';
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
 
   async function showApp(){
     loginView.style.display = 'none';
     main.style.display = 'block';
     logoutBtn.style.display = 'inline-block';
+    document.getElementById('portal-tabs').style.display = 'flex';
     const me = await authed('/api/me');
     document.getElementById('welcome').textContent = `Welcome, ${me.name} (${me.role})`;
-    loadPayments();
+    loadDuties();
   }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`${btn.dataset.tab}-panel`).classList.add('active');
+      if (btn.dataset.tab === 'duties') showDutyList();
+      if (btn.dataset.tab === 'attendance') loadAttendance();
+    });
+  });
 
   if(token){ showApp(); }
 
@@ -118,23 +260,110 @@
     location.reload();
   });
 
-  async function authed(path){
-    const res = await fetch(`${API}${path}`, { headers:{ 'Authorization': `Bearer ${token}` } });
+  async function authed(path, opts={}){
+    const res = await fetch(`${API}${path}`, {
+      ...opts,
+      headers:{ 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+    });
     if(res.status === 401){ localStorage.removeItem('sce_portal_token'); location.reload(); }
     return res.json();
   }
 
-  async function loadPayments(){
-    const data = await authed('/api/me/payments');
-    const rows = (data.payments || []).map(p => `
+  async function loadAttendance(){
+    const data = await authed('/api/me/attendance');
+    const rows = (data.attendance || []).map(a => `
       <tr>
-        <td>${new Date(p.created_at).toLocaleDateString()}</td>
-        <td>${p.amount.toLocaleString()} ${p.currency}</td>
-        <td>${p.method === 'momo' ? 'MTN MoMo' : 'Bank'}</td>
-        <td><span class="badge ${p.status}">${p.status}</span></td>
-        <td>${p.note || ''}</td>
+        <td>${a.date}</td>
+        <td><span class="badge ${a.status === 'present' ? 'paid' : a.status === 'late' ? 'pending' : 'failed'}">${a.status}</span></td>
+        <td>${a.note || ''}</td>
       </tr>`).join('');
-    document.getElementById('payments-table').innerHTML = rows || '<tr><td colspan="5">No payments yet.</td></tr>';
+    document.getElementById('attendance-table').innerHTML = rows || '<tr><td colspan="3">No attendance recorded yet.</td></tr>';
+  }
+
+  /* ---- Duties ---- */
+
+  function showDutyList(){
+    document.getElementById('duty-list-view').style.display = 'block';
+    document.getElementById('duty-detail').style.display = 'none';
+  }
+  function showDutyDetail(){
+    document.getElementById('duty-list-view').style.display = 'none';
+    document.getElementById('duty-detail').style.display = 'block';
+  }
+  document.getElementById('duty-back').addEventListener('click', () => { showDutyList(); loadDuties(); });
+
+  async function loadDuties(){
+    const data = await authed('/api/me/duties');
+    const list = document.getElementById('duty-list');
+    const rows = (data.duties || []).map(d => `
+      <div class="duty-card" onclick="openDuty(${d.id})">
+        <div class="top-row">
+          <h3>${d.title}</h3>
+          <span class="badge ${d.computed_status === 'completed' ? 'paid' : d.computed_status === 'overdue' ? 'failed' : 'pending'}">${d.computed_status}</span>
+        </div>
+        <div class="due ${d.computed_status === 'overdue' ? 'overdue-text' : ''}">Due ${d.due_date}</div>
+      </div>`).join('');
+    list.innerHTML = rows || '<p style="color:var(--ink-soft);font-size:14px;">No duties assigned yet.</p>';
+  }
+
+  let currentDutyId = null;
+  let currentDutyDone = false;
+
+  window.openDuty = async function(id){
+    const data = await authed(`/api/me/duties/${id}`);
+    const d = data.duty;
+    currentDutyId = id;
+    currentDutyDone = d.status === 'completed';
+    const computedStatus = d.status === 'completed' ? 'completed' : (d.due_date < new Date().toISOString().slice(0,10) ? 'overdue' : 'pending');
+    document.getElementById('dd-status').textContent = computedStatus;
+    document.getElementById('dd-status').className = 'badge ' + (computedStatus === 'completed' ? 'paid' : computedStatus === 'overdue' ? 'failed' : 'pending');
+    document.getElementById('dd-title').textContent = d.title;
+    document.getElementById('dd-due').textContent = d.due_date;
+    document.getElementById('dd-priority').textContent = d.priority;
+    document.getElementById('dd-desc').textContent = d.description || 'No additional details provided.';
+    document.getElementById('dd-photo-input').value = '';
+    const completeBtn = document.getElementById('dd-complete-btn');
+    const uploadSection = document.getElementById('dd-upload-section');
+    if(currentDutyDone){
+      completeBtn.textContent = 'Completed ✓';
+      completeBtn.disabled = true;
+      uploadSection.style.display = 'none';
+    } else {
+      completeBtn.textContent = 'Mark Complete';
+      completeBtn.disabled = false;
+      uploadSection.style.display = 'block';
+    }
+    showDutyDetail();
+  };
+
+  function fileToBase64(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('dd-complete-btn').addEventListener('click', async () => {
+    if(!currentDutyId || currentDutyDone) return;
+    const fileInput = document.getElementById('dd-photo-input');
+    let photo_base64 = null;
+    if(fileInput.files[0]){
+      if(fileInput.files[0].size > 1_500_000){
+        alert('Please choose a smaller photo (under ~1.5MB).');
+        return;
+      }
+      photo_base64 = await fileToBase64(fileInput.files[0]);
+    }
+    await authed(`/api/me/duties/${currentDutyId}/complete`, { method:'POST', body: JSON.stringify({ photo_base64 }) });
+    openDuty(currentDutyId);
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    });
   }
 </script>
 </body>
