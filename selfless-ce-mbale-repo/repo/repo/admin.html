@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selfless CE — Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0E2340; --navy-mid:#173A63; --navy-line:#2A4E7C;
+    --cream:#F7F3EA; --cream-2:#EFE8D8; --gold:#C99A3E; --gold-light:#E4C784;
+    --ink:#1B2430; --ink-soft:#4B5568;
+    --ok:#2E7D4F; --warn:#B8862F; --err:#B4362E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Work Sans',sans-serif;background:var(--cream);color:var(--ink);}
+  h1,h2,.display{font-family:'Fraunces',serif;font-weight:600;color:var(--navy-deep);margin:0;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy-deep);padding:22px 0;}
+  header .wrap{display:flex;justify-content:space-between;align-items:center;}
+  header h1{color:var(--cream);font-size:20px;}
+  header .sub{color:var(--gold-light);font-size:12px;letter-spacing:0.05em;text-transform:uppercase;}
+  #logout{background:none;border:1px solid rgba(247,243,234,0.4);color:var(--cream);padding:8px 14px;border-radius:2px;cursor:pointer;font-size:13px;}
+
+  #login-view{max-width:380px;margin:90px auto;padding:36px;background:#fff;border:1px solid var(--cream-2);}
+  #login-view h2{font-size:22px;margin-bottom:6px;}
+  #login-view p{color:var(--ink-soft);font-size:13.5px;margin-bottom:22px;}
+  label{font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);display:block;margin-bottom:6px;}
+  input,select,textarea{width:100%;padding:11px 13px;border:1px solid var(--cream-2);font-family:inherit;font-size:14px;margin-bottom:16px;border-radius:2px;}
+  button.primary{background:var(--gold);color:var(--navy-deep);border:none;padding:12px 20px;font-weight:600;font-size:14px;cursor:pointer;border-radius:2px;width:100%;}
+  button.primary:hover{background:var(--gold-light);}
+  .error{color:var(--err);font-size:13px;margin-top:-8px;margin-bottom:14px;}
+
+  main{display:none;padding:36px 0 80px;}
+  section{background:#fff;border:1px solid var(--cream-2);padding:26px;margin-bottom:28px;}
+  section h2{font-size:18px;margin-bottom:16px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--cream-2);}
+  th{color:var(--ink-soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;}
+  .btn-sm{background:var(--navy-deep);color:var(--cream);border:none;padding:7px 12px;font-size:12.5px;border-radius:2px;cursor:pointer;}
+  .btn-sm:hover{background:var(--navy-mid);}
+
+  #admin-tabs{display:none;}
+  .tab-btn{background:none;border:1px solid rgba(247,243,234,0.3);color:rgba(247,243,234,0.75);padding:7px 14px;font-size:12.5px;border-radius:2px;cursor:pointer;}
+  .tab-btn.active{background:var(--gold);color:var(--navy-deep);border-color:var(--gold);font-weight:600;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .status-tag{display:inline-flex;align-items:center;gap:6px;padding:5px 11px 5px 8px;border-radius:3px;font-size:11.5px;font-weight:600;}
+  .status-tag .dot{width:7px;height:7px;border-radius:50%;flex:none;}
+  .status-tag.completed,.status-tag.present{background:#DCEFDF;color:#1E6B3E;}
+  .status-tag.completed .dot,.status-tag.present .dot{background:#2E9E58;}
+  .status-tag.pending,.status-tag.late{background:#FBF0D9;color:#8A5F14;}
+  .status-tag.pending .dot,.status-tag.late .dot{background:#D9A93B;}
+  .status-tag.overdue,.status-tag.absent{background:#FBDEDA;color:#9C2E24;}
+  .status-tag.overdue .dot,.status-tag.absent .dot{background:#D14A3B;}
+
+  .filter-bar{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end;}
+  .filter-bar .field{min-width:170px;}
+  .filter-bar select{margin-bottom:0;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div>
+      <h1>Selfless CE</h1>
+      <div class="sub">Admin Dashboard</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <nav id="admin-tabs" style="display:none;gap:4px;">
+        <button class="tab-btn active" data-tab="duties">Duties</button>
+        <button class="tab-btn" data-tab="attendance">Attendance</button>
+      </nav>
+      <button id="logout" style="display:none;">Log out</button>
+    </div>
+  </div>
+</header>
+
+<div id="login-view">
+  <h2>Admin Login</h2>
+  <p>Sign in to manage students, tutors, duties, and attendance.</p>
+  <label>Email</label>
+  <input id="login-email" type="email" placeholder="admin@selfless-ce.org">
+  <label>Password</label>
+  <input id="login-password" type="password" placeholder="••••••••">
+  <div class="error" id="login-error" style="display:none;"></div>
+  <button class="primary" id="login-btn">Sign In</button>
+</div>
+
+<main id="main">
+  <div class="wrap">
+
+    <section>
+      <h2>Pending Approvals</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Requested</th><th>Action</th></tr></thead>
+        <tbody id="pending-table"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Add Student or Tutor</h2>
+      <div class="grid2">
+        <div><label>Full Name</label><input id="u-name"></div>
+        <div><label>Role</label>
+          <select id="u-role"><option value="student">Student</option><option value="tutor">Tutor</option></select>
+        </div>
+        <div><label>Email</label><input id="u-email" type="email"></div>
+        <div><label>Temporary Password</label><input id="u-password" type="text" placeholder="Set an initial password"></div>
+        <div><label>Phone (optional)</label><input id="u-phone"></div>
+      </div>
+      <div class="error" id="u-error" style="display:none;"></div>
+      <button class="primary" id="u-submit" style="width:auto;">Add Person</button>
+    </section>
+
+    <section>
+      <h2>People</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Action</th></tr></thead>
+        <tbody id="people-table"></tbody>
+      </table>
+    </section>
+
+    <div id="duties-panel" class="tab-panel active">
+
+      <section>
+        <h2>Assign New Duty</h2>
+        <div class="grid2">
+          <div><label>Student</label><select id="d-student"></select></div>
+          <div><label>Priority</label>
+            <select id="d-priority"><option value="standard">Standard</option><option value="urgent">Urgent</option></select>
+          </div>
+          <div><label>Duty Title</label><input id="d-title" placeholder="e.g. Clean and restart lab computers"></div>
+          <div><label>Due Date</label><input id="d-due" type="date"></div>
+        </div>
+        <label>Description</label>
+        <textarea id="d-desc" rows="3" placeholder="Any specifics — room, what to check, who to notify"></textarea>
+        <div class="error" id="d-error" style="display:none;"></div>
+        <button class="primary" id="d-submit" style="width:auto;">Assign Duty</button>
+      </section>
+
+      <section>
+        <h2>Duty Overview</h2>
+        <div class="filter-bar">
+          <div class="field">
+            <label>Status</label>
+            <select id="d-filter-status">
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="overdue">Overdue</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Student</label>
+            <select id="d-filter-student"><option value="">All students</option></select>
+          </div>
+          <button class="btn-sm" id="d-filter-apply">Apply Filters</button>
+        </div>
+        <table>
+          <thead><tr><th>Duty</th><th>Student</th><th>Due Date</th><th>Status</th></tr></thead>
+          <tbody id="duties-table"></tbody>
+        </table>
+      </section>
+
+    </div>
+
+    <div id="attendance-panel" class="tab-panel">
+
+      <section>
+        <h2>Mark Attendance</h2>
+        <div class="grid2">
+          <div><label>Student</label><select id="a-student"></select></div>
+          <div><label>Date</label><input id="a-date" type="date"></div>
+          <div><label>Status</label>
+            <select id="a-status">
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="absent">Absent</option>
+            </select>
+          </div>
+          <div><label>Note (optional)</label><input id="a-note" placeholder="e.g. Left early"></div>
+        </div>
+        <div class="error" id="a-error" style="display:none;"></div>
+        <button class="primary" id="a-submit" style="width:auto;">Save Attendance</button>
+      </section>
+
+      <section>
+        <h2>Attendance Log</h2>
+        <div class="filter-bar">
+          <div class="field">
+            <label>Student</label>
+            <select id="a-filter-student"><option value="">All students</option></select>
+          </div>
+          <button class="btn-sm" id="a-filter-apply">Apply Filter</button>
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Student</th><th>Status</th><th>Note</th></tr></thead>
+          <tbody id="attendance-table"></tbody>
+        </table>
+      </section>
+
+    </div>
+
+  </div>
+</main>
+
+<script>
+  // Set this to your deployed Worker URL.
+  const API = "https://selfless-ce-backend.selfless-ce-backend.workers.dev";
+
+  let token = localStorage.getItem('sce_admin_token') || null;
+  let usersCache = [];
+
+  const loginView = document.getElementById('login-view');
+  const main = document.getElementById('main');
+  const logoutBtn = document.getElementById('logout');
+
+  function showApp(){
+    loginView.style.display = 'none';
+    main.style.display = 'block';
+    logoutBtn.style.display = 'inline-block';
+    document.getElementById('admin-tabs').style.display = 'flex';
+    loadUsers();
+    loadPending();
+    loadDuties();
+  }
+
+  if(token){ showApp(); }
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`${btn.dataset.tab}-panel`).classList.add('active');
+      if (btn.dataset.tab === 'duties') loadDuties();
+      if (btn.dataset.tab === 'attendance') loadAttendance();
+    });
+  });
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try{
+      const res = await fetch(`${API}/api/auth/login`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({email, password})
+      });
+      const data = await res.json();
+      if(!res.ok || data.role !== 'admin'){ throw new Error(data.error || 'Not an admin account'); }
+      token = data.token;
+      localStorage.setItem('sce_admin_token', token);
+      showApp();
+    }catch(err){
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    }
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('sce_admin_token');
+    location.reload();
+  });
+
+  async function authed(path, opts={}){
+    const res = await fetch(`${API}${path}`, {
+      ...opts,
+      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers||{}) }
+    });
+    if(res.status === 401){ localStorage.removeItem('sce_admin_token'); location.reload(); }
+    return res.json();
+  }
+
+  async function loadUsers(){
+    const data = await authed('/api/admin/users');
+    usersCache = data.users || [];
+    const students = usersCache.filter(u => u.role === 'student');
+
+    const dSel = document.getElementById('d-student');
+    dSel.innerHTML = students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    const dFilterSel = document.getElementById('d-filter-student');
+    dFilterSel.innerHTML = '<option value="">All students</option>' + students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+
+    const aSel = document.getElementById('a-student');
+    aSel.innerHTML = students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    const aFilterSel = document.getElementById('a-filter-student');
+    aFilterSel.innerHTML = '<option value="">All students</option>' + students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+
+    const peopleRows = usersCache.map(u => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.role}</td>
+        <td>${u.email}</td>
+        <td><button class="btn-sm" onclick="resetPassword(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Reset Password</button></td>
+      </tr>`).join('');
+    document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="4">No students or tutors yet.</td></tr>';
+  }
+
+  async function loadPending(){
+    const data = await authed('/api/admin/users/pending');
+    const rows = (data.users || []).map(u => `
+      <tr>
+        <td>${u.name}</td>
+        <td>${u.email}</td>
+        <td>${u.role}</td>
+        <td>${new Date(u.created_at).toLocaleDateString()}</td>
+        <td>
+          <button class="btn-sm" onclick="approveUser(${u.id})">Approve</button>
+          <button class="btn-sm" style="background:var(--err);margin-left:6px;" onclick="rejectUser(${u.id})">Reject</button>
+        </td>
+      </tr>`).join('');
+    document.getElementById('pending-table').innerHTML = rows || '<tr><td colspan="5">No pending signups.</td></tr>';
+  }
+
+  window.approveUser = async function(id){
+    await authed(`/api/admin/users/${id}/approve`, { method:'POST', body:'{}' });
+    loadPending();
+    loadUsers();
+  };
+
+  window.rejectUser = async function(id){
+    if(!confirm('Reject and delete this signup request?')) return;
+    await authed(`/api/admin/users/${id}/reject`, { method:'POST', body:'{}' });
+    loadPending();
+  };
+
+  window.resetPassword = async function(id, name){
+    const newPassword = prompt(`Set a new password for ${name} (share it with them directly):`);
+    if(!newPassword) return;
+    if(newPassword.length < 6){ alert('Password must be at least 6 characters.'); return; }
+    await authed(`/api/admin/users/${id}/reset-password`, { method:'POST', body: JSON.stringify({ password: newPassword }) });
+    alert(`Password updated for ${name}. Share it with them directly — it won't be shown again.`);
+  };
+
+  document.getElementById('u-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('u-error');
+    errEl.style.display = 'none';
+    const body = {
+      name: document.getElementById('u-name').value,
+      role: document.getElementById('u-role').value,
+      email: document.getElementById('u-email').value,
+      password: document.getElementById('u-password').value,
+      phone: document.getElementById('u-phone').value,
+    };
+    if(!body.name || !body.email || !body.password){
+      errEl.textContent = 'Name, email, and a temporary password are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/users', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('u-name').value = '';
+    document.getElementById('u-email').value = '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-phone').value = '';
+    loadUsers();
+  });
+
+  /* ---- Duties ---- */
+
+  document.getElementById('d-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('d-error');
+    errEl.style.display = 'none';
+    const body = {
+      student_id: Number(document.getElementById('d-student').value),
+      title: document.getElementById('d-title').value,
+      description: document.getElementById('d-desc').value,
+      due_date: document.getElementById('d-due').value,
+      priority: document.getElementById('d-priority').value,
+    };
+    if(!body.student_id || !body.title || !body.due_date){
+      errEl.textContent = 'Choose a student, add a title, and set a due date.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/duties', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('d-title').value = '';
+    document.getElementById('d-desc').value = '';
+    document.getElementById('d-due').value = '';
+    loadDuties();
+  });
+
+  document.getElementById('d-filter-apply').addEventListener('click', loadDuties);
+
+  function statusTag(status){
+    const label = status === 'completed' ? 'Completed' : status === 'overdue' ? 'Overdue' : 'Pending';
+    return `<span class="status-tag ${status}"><span class="dot"></span>${label}</span>`;
+  }
+
+  async function loadDuties(){
+    const status = document.getElementById('d-filter-status').value;
+    const student = document.getElementById('d-filter-student').value;
+    const params = new URLSearchParams();
+    if(status) params.set('status', status);
+    if(student) params.set('student_id', student);
+    const data = await authed(`/api/admin/duties?${params.toString()}`);
+    const rows = (data.duties || []).map(d => `
+      <tr>
+        <td>${d.title}</td>
+        <td>${d.student_name}</td>
+        <td>${d.due_date}</td>
+        <td>${statusTag(d.computed_status)}</td>
+      </tr>`).join('');
+    document.getElementById('duties-table').innerHTML = rows || '<tr><td colspan="4">No duties yet.</td></tr>';
+  }
+
+  /* ---- Attendance ---- */
+
+  document.getElementById('a-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('a-error');
+    errEl.style.display = 'none';
+    const body = {
+      student_id: Number(document.getElementById('a-student').value),
+      date: document.getElementById('a-date').value,
+      status: document.getElementById('a-status').value,
+      note: document.getElementById('a-note').value,
+    };
+    if(!body.student_id || !body.date){
+      errEl.textContent = 'Choose a student and a date.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/attendance', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('a-note').value = '';
+    loadAttendance();
+  });
+
+  document.getElementById('a-filter-apply').addEventListener('click', loadAttendance);
+
+  async function loadAttendance(){
+    const student = document.getElementById('a-filter-student').value;
+    const params = new URLSearchParams();
+    if(student) params.set('student_id', student);
+    const data = await authed(`/api/admin/attendance?${params.toString()}`);
+    const rows = (data.attendance || []).map(a => `
+      <tr>
+        <td>${a.date}</td>
+        <td>${a.student_name}</td>
+        <td><span class="status-tag ${a.status}"><span class="dot"></span>${a.status}</span></td>
+        <td>${a.note || ''}</td>
+      </tr>`).join('');
+    document.getElementById('attendance-table').innerHTML = rows || '<tr><td colspan="4">No attendance recorded yet.</td></tr>';
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+name = "selfless-ce-backend"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "selfless_finance"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

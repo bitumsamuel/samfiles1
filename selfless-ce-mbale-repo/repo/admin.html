@@ -119,7 +119,7 @@
 
 <script>
   // Set this to your deployed Worker URL (same one used by the chat widget).
-  const API = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
+  const API = "https://selfless-ce-backend.selfless-ce-backend.workers.dev";
 
   let token = localStorage.getItem('sce_admin_token') || null;
   let usersCache = [];
@@ -248,7 +248,7 @@
 
   window.payNow = async function(id, method){
     if(method === 'bank'){
-      const ref = prompt('Enter the bank transfer reference number once you\\'ve sent it manually:');
+      const ref = prompt('Enter the bank transfer reference number once you\'ve sent it manually:');
       if(ref === null) return;
       await authed(`/api/admin/payments/${id}/pay`, { method:'POST', body: JSON.stringify({ reference: ref }) });
     } else {
