@@ -60,6 +60,17 @@
   .filter-bar{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;align-items:flex-end;}
   .filter-bar .field{min-width:170px;}
   .filter-bar select{margin-bottom:0;}
+
+  @media print {
+    header, #login-view, #admin-tabs, .filter-bar, section:not(#duty-overview-section) { display:none !important; }
+    body { background:#fff; }
+    #duty-overview-section { border:none; padding:0; }
+    #print-header { display:block !important; }
+    table { border:1px solid #999; }
+    th { background:#eee !important; color:#111 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .status-tag { border:1px solid #999; background:#fff !important; color:#111 !important; }
+    .status-tag .dot { background:#111 !important; }
+  }
 </style>
 </head>
 <body>
@@ -143,7 +154,7 @@
         <button class="primary" id="d-submit" style="width:auto;">Assign Duty</button>
       </section>
 
-      <section>
+      <section id="duty-overview-section">
         <h2>Duty Overview</h2>
         <div class="filter-bar">
           <div class="field">
@@ -160,6 +171,11 @@
             <select id="d-filter-student"><option value="">All students</option></select>
           </div>
           <button class="btn-sm" id="d-filter-apply">Apply Filters</button>
+          <button class="btn-sm" id="d-print" style="background:var(--navy-mid);">Print</button>
+        </div>
+        <div id="print-header" style="display:none;">
+          <h2 style="margin-bottom:2px;">Selfless CE — Duty Overview</h2>
+          <p style="color:var(--ink-soft);font-size:12.5px;margin:0 0 16px;" id="print-date"></p>
         </div>
         <table>
           <thead><tr><th>Duty</th><th>Student</th><th>Due Date</th><th>Status</th></tr></thead>
@@ -389,6 +405,11 @@
   });
 
   document.getElementById('d-filter-apply').addEventListener('click', loadDuties);
+
+  document.getElementById('d-print').addEventListener('click', () => {
+    document.getElementById('print-date').textContent = `Printed ${new Date().toLocaleDateString()}`;
+    window.print();
+  });
 
   function statusTag(status){
     const label = status === 'completed' ? 'Completed' : status === 'overdue' ? 'Overdue' : 'Pending';
