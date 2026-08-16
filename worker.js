@@ -247,6 +247,26 @@ export default {
         return json({ users: results });
       }
 
+      const deleteUserMatch = path.match(/^\/api\/admin\/users\/(\d+)$/);
+      if (deleteUserMatch && request.method === "DELETE") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const id = deleteUserMatch[1];
+        const target = await env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(id).first();
+        if (!target) return json({ error: "Not found" }, 404);
+        if (target.role === "admin") return json({ error: "Can't delete an admin account this way." }, 400);
+        // Clean up everything tied to this person so nothing is left orphaned.
+        const assignmentIds = (await env.DB.prepare("SELECT id FROM rota_assignments WHERE student_id = ?").bind(id).all()).results.map((r) => r.id);
+        for (const aid of assignmentIds) {
+          await env.DB.prepare("DELETE FROM swap_requests WHERE assignment_id = ?").bind(aid).run();
+        }
+        await env.DB.prepare("DELETE FROM rota_assignments WHERE student_id = ?").bind(id).run();
+        await env.DB.prepare("DELETE FROM duties WHERE student_id = ?").bind(id).run();
+        await env.DB.prepare("DELETE FROM attendance WHERE student_id = ?").bind(id).run();
+        await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
+        return json({ ok: true });
+      }
+
       // ---- Admin: duties ----
       if (path === "/api/admin/duties" && request.method === "POST") {
         const auth = await requireAuth(request, env, ["admin"]);
@@ -368,6 +388,16 @@ export default {
           "INSERT INTO duty_types (name, description, checklist_json) VALUES (?, ?, ?)"
         ).bind(b.name, b.description || null, JSON.stringify(checklist)).run();
         return json({ id: res.meta.last_row_id });
+      }
+
+      const deleteDutyTypeMatch = path.match(/^\/api\/admin\/duty-types\/(\d+)$/);
+      if (deleteDutyTypeMatch && request.method === "DELETE") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const inUse = await env.DB.prepare("SELECT id FROM rota_assignments WHERE duty_type_id = ? LIMIT 1").bind(deleteDutyTypeMatch[1]).first();
+        if (inUse) return json({ error: "Can't delete a duty type that already has assignments. Remove those first, or just stop using it going forward." }, 400);
+        await env.DB.prepare("DELETE FROM duty_types WHERE id = ?").bind(deleteDutyTypeMatch[1]).run();
+        return json({ ok: true });
       }
 
       if (path === "/api/admin/duty-types" && request.method === "GET") {

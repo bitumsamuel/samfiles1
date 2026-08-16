@@ -395,7 +395,10 @@
             <option value="internship" ${u.status === 'internship' ? 'selected' : ''}>Internship</option>
           </select>
         </td>
-        <td><button class="btn-sm" onclick="resetPassword(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Reset Password</button></td>
+        <td>
+          <button class="btn-sm" onclick="resetPassword(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Reset Password</button>
+          <button class="btn-sm" style="background:var(--err);margin-left:6px;" onclick="deleteUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Delete</button>
+        </td>
       </tr>`).join('');
     document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="5">No students or tutors yet.</td></tr>';
 
@@ -441,6 +444,13 @@
     if(newPassword.length < 6){ alert('Password must be at least 6 characters.'); return; }
     await authed(`/api/admin/users/${id}/reset-password`, { method:'POST', body: JSON.stringify({ password: newPassword }) });
     alert(`Password updated for ${name}. Share it with them directly — it won't be shown again.`);
+  };
+
+  window.deleteUser = async function(id, name){
+    if(!confirm(`Delete ${name}'s account? This also permanently removes their duties, attendance, and rota history. This cannot be undone.`)) return;
+    const data = await authed(`/api/admin/users/${id}`, { method:'DELETE' });
+    if(data.error){ alert(data.error); return; }
+    loadUsers();
   };
 
   document.getElementById('u-submit').addEventListener('click', async () => {
@@ -584,12 +594,22 @@
     const data = await authed('/api/admin/duty-types');
     const types = data.duty_types || [];
     document.getElementById('dt-list').innerHTML = types.length
-      ? 'Existing: ' + types.map(t => t.name).join(', ')
+      ? types.map(t => `<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--cream-2);padding:4px 6px 4px 10px;margin:0 6px 6px 0;border-radius:2px;">
+          ${t.name}
+          <button onclick="deleteDutyType(${t.id}, '${t.name.replace(/'/g, "\\'")}')" style="background:none;border:none;color:var(--err);cursor:pointer;font-size:14px;padding:0 4px;" title="Delete">&times;</button>
+        </span>`).join('')
       : 'No duty types yet — add one above (e.g. Cooking, Cleaning).';
     const sel = document.getElementById('rota-duty-types');
     sel.innerHTML = types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
     sel.dataset.loaded = '1';
   }
+
+  window.deleteDutyType = async function(id, name){
+    if(!confirm(`Delete duty type "${name}"?`)) return;
+    const data = await authed(`/api/admin/duty-types/${id}`, { method:'DELETE' });
+    if(data.error){ alert(data.error); return; }
+    loadDutyTypes();
+  };
 
   document.getElementById('rota-generate').addEventListener('click', async () => {
     const errEl = document.getElementById('rota-error');
