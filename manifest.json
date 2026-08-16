@@ -1,6 +1,6 @@
 {
-  "name": "Selfless CE Student Portal",
-  "short_name": "Selfless CE",
+  "name": "Selfless CE Mbale",
+  "short_name": "Selfless Mbale",
   "description": "View your duties and attendance at Selfless CE Mbale Tech Center.",
   "start_url": "./portal.html",
   "scope": "./",
