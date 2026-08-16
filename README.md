@@ -125,3 +125,40 @@ maintaining native Android code.
 - Only admins can create accounts directly or approve self-signups
 - Consider tightening CORS in `worker.js` (`ALLOWED_ORIGIN`) to your exact site URL once
   everything is live, instead of `"*"`
+
+## Duty Rota & Accountability Manager
+
+A separate system from the one-off "Duties" tab — this handles **recurring weekly duties**
+(cooking, cleaning, etc.) with fair rotation, a swap board, checklists, and ratings.
+
+**Admin** (`admin.html` → "Duty Rota" tab):
+- Create duty types (e.g. "Cooking", "Cleaning") with a checklist of steps each one requires
+- Click "Generate Rota" for a given week + duty types — the system picks whichever *active*
+  student has done the fewest rota duties so far (fair round-robin), one student per duty,
+  never double-booking someone the same week
+- View any week's assignments, and rate/check off completed ones
+- See open swap requests at a glance
+
+**Students & Tutors** (`portal.html`):
+- **"Duty Rota"** — see your own assigned duties, request a swap if you can't do it (e.g. exam
+  conflict) with an optional reason
+- **"Swap Board"** — see everyone's open swap requests and claim one to take over
+- Tutors additionally get a **"Rate Duties"** tab to check off checklist items and give a 1-5
+  rating on any student's completed duty, center-wide (not just their own)
+
+**Student status tags** — in the People table on `admin.html`, each student has a status
+dropdown: Active / Probation / Internship. This also controls rota eligibility: only
+students marked **Active** get pulled into "Generate Rota." Students on Probation or
+Internship are automatically skipped, so you don't need to remember to exclude them manually.
+
+## Announcements
+
+Admins can post short announcements (title + message) from `admin.html`. They show up for
+everyone — students, tutors, and admins — under the "Announcements" tab in `portal.html`
+and, for admins, at the top of `admin.html`'s own Announcements tab. Newest 20 shown.
+
+**One-time setup for this update:**
+```bash
+wrangler d1 execute selfless_finance --file=./migration_004_duty_rota.sql --remote
+wrangler deploy worker.js --name selfless-ce-backend
+```

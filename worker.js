@@ -110,10 +110,19 @@ async function handleChat(request, env) {
       messages: messages.slice(-20),
     }),
   });
-  const data = await apiResp.json();
+
+  const rawText = await apiResp.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseErr) {
+    console.error("Anthropic API returned non-JSON:", apiResp.status, rawText.slice(0, 500));
+    return json({ reply: "Sorry, the assistant is having trouble right now.", debug: { status: apiResp.status, body: rawText.slice(0, 300) } });
+  }
+
   if (!apiResp.ok) {
     console.error("Anthropic API error:", data);
-    return json({ reply: "Sorry, the assistant is having trouble right now." });
+    return json({ reply: "Sorry, the assistant is having trouble right now.", debug: { status: apiResp.status, error: data } });
   }
   const textBlock = (data.content || []).find((b) => b.type === "text");
   return json({ reply: textBlock ? textBlock.text : "Sorry, I couldn't generate a reply." });
@@ -233,7 +242,7 @@ export default {
         const auth = await requireAuth(request, env, ["admin"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          "SELECT id, role, name, email, phone FROM users WHERE role != 'admin' AND approved = 1 ORDER BY name"
+          "SELECT id, role, name, email, phone, status FROM users WHERE role != 'admin' AND approved = 1 ORDER BY name"
         ).all();
         return json({ users: results });
       }
@@ -335,6 +344,183 @@ export default {
         query += ` ORDER BY a.date DESC`;
         const { results } = await env.DB.prepare(query).bind(...binds).all();
         return json({ attendance: results });
+      }
+
+      // ---- Admin: student status tag ----
+      const statusMatch = path.match(/^\/api\/admin\/users\/(\d+)\/status$/);
+      if (statusMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!["active", "probation", "internship"].includes(b.status)) return json({ error: "Invalid status" }, 400);
+        await env.DB.prepare("UPDATE users SET status = ? WHERE id = ?").bind(b.status, statusMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      // ---- Admin: duty types ----
+      if (path === "/api/admin/duty-types" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.name) return json({ error: "Name is required" }, 400);
+        const checklist = Array.isArray(b.checklist) ? b.checklist.filter(Boolean) : [];
+        const res = await env.DB.prepare(
+          "INSERT INTO duty_types (name, description, checklist_json) VALUES (?, ?, ?)"
+        ).bind(b.name, b.description || null, JSON.stringify(checklist)).run();
+        return json({ id: res.meta.last_row_id });
+      }
+
+      if (path === "/api/admin/duty-types" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare("SELECT * FROM duty_types ORDER BY name").all();
+        return json({ duty_types: results.map((d) => ({ ...d, checklist: JSON.parse(d.checklist_json || "[]") })) });
+      }
+
+      // ---- Admin: generate this week's rota ----
+      // Fair round-robin: for each duty type, pick the active/approved student with the
+      // fewest total past assignments (ties broken by whoever was assigned longest ago),
+      // skipping anyone already assigned a duty for the same week.
+      if (path === "/api/admin/rota/generate" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.week_start || !Array.isArray(b.duty_type_ids) || b.duty_type_ids.length === 0) {
+          return json({ error: "week_start and duty_type_ids are required" }, 400);
+        }
+        const { results: students } = await env.DB.prepare(
+          "SELECT id FROM users WHERE role = 'student' AND approved = 1 AND status = 'active' ORDER BY id"
+        ).all();
+        if (students.length === 0) return json({ error: "No active students available to assign." }, 400);
+
+        const { results: counts } = await env.DB.prepare(
+          "SELECT student_id, COUNT(*) as cnt, MAX(week_start) as last_week FROM rota_assignments GROUP BY student_id"
+        ).all();
+        const countMap = new Map(students.map((s) => [s.id, { cnt: 0, last_week: "" }]));
+        counts.forEach((c) => countMap.set(c.student_id, { cnt: c.cnt, last_week: c.last_week || "" }));
+
+        const alreadyAssignedThisWeek = new Set(
+          (await env.DB.prepare("SELECT student_id FROM rota_assignments WHERE week_start = ?").bind(b.week_start).all()).results.map((r) => r.student_id)
+        );
+
+        const created = [];
+        for (const dutyTypeId of b.duty_type_ids) {
+          const eligible = students.filter((s) => !alreadyAssignedThisWeek.has(s.id));
+          if (eligible.length === 0) break; // ran out of students for this week
+          eligible.sort((a, b2) => {
+            const ca = countMap.get(a.id), cb = countMap.get(b2.id);
+            if (ca.cnt !== cb.cnt) return ca.cnt - cb.cnt;
+            return ca.last_week < cb.last_week ? -1 : ca.last_week > cb.last_week ? 1 : a.id - b2.id;
+          });
+          const chosen = eligible[0];
+          await env.DB.prepare(
+            "INSERT INTO rota_assignments (duty_type_id, student_id, week_start) VALUES (?, ?, ?)"
+          ).bind(dutyTypeId, chosen.id, b.week_start).run();
+          countMap.set(chosen.id, { cnt: countMap.get(chosen.id).cnt + 1, last_week: b.week_start });
+          alreadyAssignedThisWeek.add(chosen.id);
+          created.push({ duty_type_id: dutyTypeId, student_id: chosen.id });
+        }
+        return json({ created });
+      }
+
+      if (path === "/api/admin/rota" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const week = url.searchParams.get("week");
+        let query = `SELECT r.*, u.name as student_name, dt.name as duty_name, dt.checklist_json
+                      FROM rota_assignments r
+                      JOIN users u ON u.id = r.student_id
+                      JOIN duty_types dt ON dt.id = r.duty_type_id WHERE 1=1`;
+        const binds = [];
+        if (week) { query += ` AND r.week_start = ?`; binds.push(week); }
+        query += ` ORDER BY r.week_start DESC, dt.name`;
+        const { results } = await env.DB.prepare(query).bind(...binds).all();
+        return json({ assignments: results.map((r) => ({ ...r, checklist: JSON.parse(r.checklist_json || "[]"), checklist_state: JSON.parse(r.checklist_state || "[]") })) });
+      }
+
+      // Rate + checklist an assignment — admin or tutor
+      const rateMatch = path.match(/^\/api\/admin\/rota\/(\d+)\/rate$/);
+      if (rateMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (b.rating && (b.rating < 1 || b.rating > 5)) return json({ error: "Rating must be 1-5" }, 400);
+        await env.DB.prepare(
+          `UPDATE rota_assignments SET status = 'completed', checklist_state = ?, rating = ?, rated_by = ?, rated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        ).bind(JSON.stringify(b.checklist_state || []), b.rating || null, auth.id, rateMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      // ---- Swap board (student/tutor) ----
+      if (path === "/api/me/rota" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          `SELECT r.*, dt.name as duty_name, dt.checklist_json FROM rota_assignments r
+           JOIN duty_types dt ON dt.id = r.duty_type_id
+           WHERE r.student_id = ? ORDER BY r.week_start DESC`
+        ).bind(auth.id).all();
+        return json({ assignments: results.map((r) => ({ ...r, checklist: JSON.parse(r.checklist_json || "[]") })) });
+      }
+
+      const swapRequestMatch = path.match(/^\/api\/me\/rota\/(\d+)\/swap-request$/);
+      if (swapRequestMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const assignment = await env.DB.prepare("SELECT * FROM rota_assignments WHERE id = ? AND student_id = ?")
+          .bind(swapRequestMatch[1], auth.id).first();
+        if (!assignment) return json({ error: "Not found" }, 404);
+        const b = await request.json().catch(() => ({}));
+        await env.DB.prepare("INSERT INTO swap_requests (assignment_id, requested_by, reason) VALUES (?, ?, ?)")
+          .bind(assignment.id, auth.id, b.reason || null).run();
+        await env.DB.prepare("UPDATE rota_assignments SET status = 'swap_requested' WHERE id = ?").bind(assignment.id).run();
+        return json({ ok: true });
+      }
+
+      if (path === "/api/swap-board" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          `SELECT sw.*, r.week_start, r.student_id as original_student_id, u.name as original_student_name, dt.name as duty_name
+           FROM swap_requests sw
+           JOIN rota_assignments r ON r.id = sw.assignment_id
+           JOIN users u ON u.id = r.student_id
+           JOIN duty_types dt ON dt.id = r.duty_type_id
+           WHERE sw.status = 'open' ORDER BY sw.created_at DESC`
+        ).all();
+        return json({ swaps: results });
+      }
+
+      const swapAcceptMatch = path.match(/^\/api\/swap-board\/(\d+)\/accept$/);
+      if (swapAcceptMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const swap = await env.DB.prepare("SELECT * FROM swap_requests WHERE id = ? AND status = 'open'").bind(swapAcceptMatch[1]).first();
+        if (!swap) return json({ error: "This swap is no longer available." }, 404);
+        if (swap.requested_by === auth.id) return json({ error: "You can't accept your own swap request." }, 400);
+        await env.DB.prepare("UPDATE rota_assignments SET student_id = ?, status = 'assigned' WHERE id = ?")
+          .bind(auth.id, swap.assignment_id).run();
+        await env.DB.prepare("UPDATE swap_requests SET status = 'accepted', accepted_by = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .bind(auth.id, swap.id).run();
+        return json({ ok: true });
+      }
+
+      // ---- Announcements ----
+      if (path === "/api/admin/announcements" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.title || !b.body) return json({ error: "Title and body are required" }, 400);
+        const res = await env.DB.prepare("INSERT INTO announcements (title, body, created_by) VALUES (?, ?, ?)")
+          .bind(b.title, b.body, auth.id).run();
+        return json({ id: res.meta.last_row_id });
+      }
+
+      if (path === "/api/announcements" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin", "student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 20").all();
+        return json({ announcements: results });
       }
 
       // ---- Student / tutor: own profile + attendance ----

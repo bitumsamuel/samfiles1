@@ -77,6 +77,10 @@
       <nav id="portal-tabs" style="display:none;gap:4px;">
         <button class="tab-btn active" data-tab="duties">My Duties</button>
         <button class="tab-btn" data-tab="attendance">My Attendance</button>
+        <button class="tab-btn" data-tab="myrota">Duty Rota</button>
+        <button class="tab-btn" data-tab="board">Swap Board</button>
+        <button class="tab-btn" data-tab="news">Announcements</button>
+        <button class="tab-btn" data-tab="rate" id="rate-tab-btn" style="display:none;">Rate Duties</button>
       </nav>
       <button id="logout">Log out</button>
     </div>
@@ -154,6 +158,29 @@
       </table>
     </div>
 
+    <div id="myrota-panel" class="tab-panel">
+      <div class="duty-list" id="myrota-list"></div>
+    </div>
+
+    <div id="board-panel" class="tab-panel">
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">
+        Someone needs a swap on their rota duty — accept one below to take it over.
+      </p>
+      <div class="duty-list" id="board-list"></div>
+    </div>
+
+    <div id="news-panel" class="tab-panel">
+      <div style="display:flex;flex-direction:column;gap:12px;" id="news-list"></div>
+    </div>
+
+    <div id="rate-panel" class="tab-panel">
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Check off and rate this week's completed rota duties.</p>
+      <table>
+        <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th></th></tr></thead>
+        <tbody id="rate-table"></tbody>
+      </table>
+    </div>
+
   </div>
 </main>
 
@@ -217,6 +244,7 @@
     document.getElementById('portal-tabs').style.display = 'flex';
     const me = await authed('/api/me');
     document.getElementById('welcome').textContent = `Welcome, ${me.name} (${me.role})`;
+    if (me.role === 'tutor') document.getElementById('rate-tab-btn').style.display = 'inline-block';
     loadDuties();
   }
 
@@ -228,6 +256,10 @@
       document.getElementById(`${btn.dataset.tab}-panel`).classList.add('active');
       if (btn.dataset.tab === 'duties') showDutyList();
       if (btn.dataset.tab === 'attendance') loadAttendance();
+      if (btn.dataset.tab === 'myrota') loadMyRota();
+      if (btn.dataset.tab === 'board') loadSwapBoard();
+      if (btn.dataset.tab === 'news') loadNews();
+      if (btn.dataset.tab === 'rate') loadRateTable();
     });
   });
 
@@ -359,6 +391,91 @@
     await authed(`/api/me/duties/${currentDutyId}/complete`, { method:'POST', body: JSON.stringify({ photo_base64 }) });
     openDuty(currentDutyId);
   });
+
+  /* ---- Duty Rota, Swap Board, Announcements ---- */
+
+  function rotaStatusBadgeClass(status){
+    return status === 'completed' ? 'paid' : status === 'swap_requested' ? 'failed' : 'pending';
+  }
+
+  async function loadMyRota(){
+    const data = await authed('/api/me/rota');
+    const items = (data.assignments || []).map(a => `
+      <div class="duty-card" style="cursor:default;">
+        <div class="top-row">
+          <h3>${a.duty_name}</h3>
+          <span class="badge ${rotaStatusBadgeClass(a.status)}">${a.status.replace('_',' ')}</span>
+        </div>
+        <div class="due">Week of ${a.week_start}</div>
+        ${a.status === 'assigned' ? `<button class="btn-sm" style="margin-top:10px;background:var(--navy-deep);color:#fff;border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;cursor:pointer;" onclick="requestSwap(${a.id})">Request Swap</button>` : ''}
+      </div>`).join('');
+    document.getElementById('myrota-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:14px;">No rota duties assigned yet.</p>';
+  }
+
+  window.requestSwap = async function(assignmentId){
+    const reason = prompt('Why do you need a swap? (e.g. exam that day)');
+    if(reason === null) return;
+    await authed(`/api/me/rota/${assignmentId}/swap-request`, { method:'POST', body: JSON.stringify({ reason }) });
+    loadMyRota();
+  };
+
+  async function loadSwapBoard(){
+    const data = await authed('/api/swap-board');
+    const items = (data.swaps || []).map(s => `
+      <div class="duty-card" style="cursor:default;">
+        <div class="top-row">
+          <h3>${s.duty_name}</h3>
+          <span class="badge pending">open</span>
+        </div>
+        <div class="due">Week of ${s.week_start} — currently ${s.original_student_name}</div>
+        ${s.reason ? `<div class="due" style="margin-top:4px;">Reason: ${s.reason}</div>` : ''}
+        <button class="btn-sm" style="margin-top:10px;background:var(--gold);color:var(--navy-deep);border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="acceptSwap(${s.id})">Accept This Duty</button>
+      </div>`).join('');
+    document.getElementById('board-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:14px;">No open swap requests right now.</p>';
+  }
+
+  window.acceptSwap = async function(swapId){
+    if(!confirm('Take over this duty?')) return;
+    const data = await authed(`/api/swap-board/${swapId}/accept`, { method:'POST', body:'{}' });
+    if(data.error){ alert(data.error); return; }
+    loadSwapBoard();
+    loadMyRota();
+  };
+
+  async function loadNews(){
+    const data = await authed('/api/announcements');
+    const items = (data.announcements || []).map(a => `
+      <div style="border:1px solid var(--cream-2);background:#fff;padding:14px 16px;">
+        <div style="font-weight:600;font-family:'Fraunces',serif;font-size:15px;color:var(--navy-deep);">${a.title}</div>
+        <div style="font-size:13.5px;color:var(--ink-soft);margin-top:6px;line-height:1.5;">${a.body}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">${new Date(a.created_at).toLocaleDateString()}</div>
+      </div>`).join('');
+    document.getElementById('news-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:14px;">No announcements yet.</p>';
+  }
+
+  async function loadRateTable(){
+    const data = await authed('/api/admin/rota');
+    const rows = (data.assignments || []).map(a => `
+      <tr>
+        <td>${a.duty_name}</td>
+        <td>${a.student_name}</td>
+        <td><span class="badge ${rotaStatusBadgeClass(a.status)}">${a.status.replace('_',' ')}</span></td>
+        <td>${a.rating ? '★'.repeat(a.rating) : '—'}</td>
+        <td>${a.status !== 'completed' ? `<button class="btn-sm" style="background:var(--navy-deep);color:#fff;border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick='rateAssignment(${a.id}, ${JSON.stringify(a.checklist)})'>Rate</button>` : ''}</td>
+      </tr>`).join('');
+    document.getElementById('rate-table').innerHTML = rows || '<tr><td colspan="5">No rota assignments yet.</td></tr>';
+  }
+
+  window.rateAssignment = async function(id, checklist){
+    const checked = [];
+    for(const item of checklist){
+      checked.push(confirm(`Completed: "${item}"?\n\nOK = Yes, Cancel = No`));
+    }
+    const ratingStr = prompt('Rating 1-5 (how well was it done?):', '5');
+    const rating = ratingStr ? Number(ratingStr) : null;
+    await authed(`/api/admin/rota/${id}/rate`, { method:'POST', body: JSON.stringify({ checklist_state: checked, rating }) });
+    loadRateTable();
+  };
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

@@ -85,6 +85,8 @@
       <nav id="admin-tabs" style="display:none;gap:4px;">
         <button class="tab-btn active" data-tab="duties">Duties</button>
         <button class="tab-btn" data-tab="attendance">Attendance</button>
+        <button class="tab-btn" data-tab="rota">Duty Rota</button>
+        <button class="tab-btn" data-tab="announcements">Announcements</button>
       </nav>
       <button id="logout" style="display:none;">Log out</button>
     </div>
@@ -131,7 +133,7 @@
     <section>
       <h2>People</h2>
       <table>
-        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Action</th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="people-table"></tbody>
       </table>
     </section>
@@ -222,6 +224,76 @@
 
     </div>
 
+    <div id="rota-panel" class="tab-panel">
+
+      <section>
+        <h2>Duty Types</h2>
+        <div class="grid2">
+          <div><label>Name</label><input id="dt-name" placeholder="e.g. Cooking, Cleaning"></div>
+          <div><label>Description (optional)</label><input id="dt-desc" placeholder="e.g. Prepare and clean up dinner"></div>
+        </div>
+        <label>Checklist items (one per line)</label>
+        <textarea id="dt-checklist" rows="3" placeholder="Wash dishes&#10;Wipe counters&#10;Sweep floor"></textarea>
+        <div class="error" id="dt-error" style="display:none;"></div>
+        <button class="primary" id="dt-submit" style="width:auto;">Add Duty Type</button>
+        <div id="dt-list" style="margin-top:16px;font-size:13.5px;color:var(--ink-soft);"></div>
+      </section>
+
+      <section>
+        <h2>Generate This Week's Rota</h2>
+        <div class="grid2">
+          <div><label>Week Starting (Monday)</label><input id="rota-week" type="date"></div>
+          <div><label>Duty Types to Assign</label><select id="rota-duty-types" multiple size="4"></select></div>
+        </div>
+        <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 14px;">
+          Assigns the fairest-turn active student to each duty automatically (fewest past assignments first).
+          Hold Ctrl/Cmd to select multiple duty types.
+        </p>
+        <div class="error" id="rota-error" style="display:none;"></div>
+        <button class="primary" id="rota-generate" style="width:auto;">Generate Rota</button>
+      </section>
+
+      <section>
+        <h2>This Week's Assignments</h2>
+        <div class="filter-bar">
+          <div class="field"><label>Week</label><input id="rota-filter-week" type="date"></div>
+          <button class="btn-sm" id="rota-filter-apply">View Week</button>
+        </div>
+        <table>
+          <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th>Action</th></tr></thead>
+          <tbody id="rota-table"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Swap Requests</h2>
+        <table>
+          <thead><tr><th>Duty</th><th>Original Student</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody id="swaps-table"></tbody>
+        </table>
+      </section>
+
+    </div>
+
+    <div id="announcements-panel" class="tab-panel">
+
+      <section>
+        <h2>Post Announcement</h2>
+        <label>Title</label>
+        <input id="an-title" placeholder="e.g. Center closed for public holiday">
+        <label>Message</label>
+        <textarea id="an-body" rows="3" placeholder="Details for students and tutors..."></textarea>
+        <div class="error" id="an-error" style="display:none;"></div>
+        <button class="primary" id="an-submit" style="width:auto;">Post</button>
+      </section>
+
+      <section>
+        <h2>Recent Announcements</h2>
+        <div id="an-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </section>
+
+    </div>
+
   </div>
 </main>
 
@@ -256,6 +328,8 @@
       document.getElementById(`${btn.dataset.tab}-panel`).classList.add('active');
       if (btn.dataset.tab === 'duties') loadDuties();
       if (btn.dataset.tab === 'attendance') loadAttendance();
+      if (btn.dataset.tab === 'rota') { loadDutyTypes(); loadRota(); loadSwaps(); }
+      if (btn.dataset.tab === 'announcements') loadAnnouncements();
     });
   });
 
@@ -314,10 +388,24 @@
         <td>${u.name}</td>
         <td>${u.role}</td>
         <td>${u.email}</td>
+        <td>
+          <select onchange="setStatus(${u.id}, this.value)" style="margin:0;padding:5px 8px;font-size:12.5px;width:auto;">
+            <option value="active" ${u.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="probation" ${u.status === 'probation' ? 'selected' : ''}>Probation</option>
+            <option value="internship" ${u.status === 'internship' ? 'selected' : ''}>Internship</option>
+          </select>
+        </td>
         <td><button class="btn-sm" onclick="resetPassword(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Reset Password</button></td>
       </tr>`).join('');
-    document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="4">No students or tutors yet.</td></tr>';
+    document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="5">No students or tutors yet.</td></tr>';
+
+    const dutySel = document.getElementById('rota-duty-types');
+    if (dutySel && !dutySel.dataset.loaded) loadDutyTypes();
   }
+
+  window.setStatus = async function(id, status){
+    await authed(`/api/admin/users/${id}/status`, { method:'POST', body: JSON.stringify({ status }) });
+  };
 
   async function loadPending(){
     const data = await authed('/api/admin/users/pending');
@@ -470,6 +558,128 @@
         <td>${a.note || ''}</td>
       </tr>`).join('');
     document.getElementById('attendance-table').innerHTML = rows || '<tr><td colspan="4">No attendance recorded yet.</td></tr>';
+  }
+
+  /* ---- Duty Rota ---- */
+
+  document.getElementById('dt-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('dt-error');
+    errEl.style.display = 'none';
+    const checklist = document.getElementById('dt-checklist').value.split('\n').map(s => s.trim()).filter(Boolean);
+    const body = {
+      name: document.getElementById('dt-name').value,
+      description: document.getElementById('dt-desc').value,
+      checklist,
+    };
+    if(!body.name){ errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+    const data = await authed('/api/admin/duty-types', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('dt-name').value = '';
+    document.getElementById('dt-desc').value = '';
+    document.getElementById('dt-checklist').value = '';
+    loadDutyTypes();
+  });
+
+  async function loadDutyTypes(){
+    const data = await authed('/api/admin/duty-types');
+    const types = data.duty_types || [];
+    document.getElementById('dt-list').innerHTML = types.length
+      ? 'Existing: ' + types.map(t => t.name).join(', ')
+      : 'No duty types yet — add one above (e.g. Cooking, Cleaning).';
+    const sel = document.getElementById('rota-duty-types');
+    sel.innerHTML = types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    sel.dataset.loaded = '1';
+  }
+
+  document.getElementById('rota-generate').addEventListener('click', async () => {
+    const errEl = document.getElementById('rota-error');
+    errEl.style.display = 'none';
+    const week = document.getElementById('rota-week').value;
+    const selected = Array.from(document.getElementById('rota-duty-types').selectedOptions).map(o => Number(o.value));
+    if(!week || selected.length === 0){
+      errEl.textContent = 'Pick a week start date and at least one duty type.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/rota/generate', { method:'POST', body: JSON.stringify({ week_start: week, duty_type_ids: selected }) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('rota-filter-week').value = week;
+    loadRota(week);
+  });
+
+  document.getElementById('rota-filter-apply').addEventListener('click', () => loadRota(document.getElementById('rota-filter-week').value));
+
+  async function loadRota(week){
+    const w = week || document.getElementById('rota-filter-week').value;
+    const params = new URLSearchParams();
+    if(w) params.set('week', w);
+    const data = await authed(`/api/admin/rota?${params.toString()}`);
+    const rows = (data.assignments || []).map(a => `
+      <tr>
+        <td>${a.duty_name}</td>
+        <td>${a.student_name}</td>
+        <td><span class="status-tag ${a.status === 'completed' ? 'completed' : a.status === 'swap_requested' ? 'pending' : 'pending'}"><span class="dot"></span>${a.status.replace('_',' ')}</span></td>
+        <td>${a.rating ? '★'.repeat(a.rating) : '—'}</td>
+        <td>${a.status !== 'completed' ? `<button class="btn-sm" onclick="rateAssignment(${a.id}, ${JSON.stringify(a.checklist).replace(/"/g,'&quot;')})">Rate / Check Off</button>` : ''}</td>
+      </tr>`).join('');
+    document.getElementById('rota-table').innerHTML = rows || '<tr><td colspan="5">No assignments for this week yet.</td></tr>';
+  }
+
+  window.rateAssignment = async function(id, checklist){
+    const checked = [];
+    for(const item of checklist){
+      checked.push(confirm(`Completed: "${item}"?\n\nOK = Yes, Cancel = No`));
+    }
+    const ratingStr = prompt('Rating 1-5 (how well was it done?):', '5');
+    const rating = ratingStr ? Number(ratingStr) : null;
+    await authed(`/api/admin/rota/${id}/rate`, { method:'POST', body: JSON.stringify({ checklist_state: checked, rating }) });
+    loadRota();
+  };
+
+  async function loadSwaps(){
+    // Swap requests are derived from rota assignments currently in 'swap_requested' status.
+    const rotaData = await authed('/api/admin/rota');
+    const openSwaps = (rotaData.assignments || []).filter(a => a.status === 'swap_requested');
+    const rows = openSwaps.map(a => `
+      <tr>
+        <td>${a.duty_name}</td>
+        <td>${a.student_name}</td>
+        <td>Awaiting another student to accept on the Swap Board</td>
+        <td><span class="status-tag pending"><span class="dot"></span>open</span></td>
+      </tr>`).join('');
+    document.getElementById('swaps-table').innerHTML = rows || '<tr><td colspan="4">No open swap requests.</td></tr>';
+  }
+
+  /* ---- Announcements ---- */
+
+  document.getElementById('an-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('an-error');
+    errEl.style.display = 'none';
+    const body = {
+      title: document.getElementById('an-title').value,
+      body: document.getElementById('an-body').value,
+    };
+    if(!body.title || !body.body){
+      errEl.textContent = 'Title and message are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/announcements', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    document.getElementById('an-title').value = '';
+    document.getElementById('an-body').value = '';
+    loadAnnouncements();
+  });
+
+  async function loadAnnouncements(){
+    const data = await authed('/api/announcements');
+    const items = (data.announcements || []).map(a => `
+      <div style="border:1px solid var(--cream-2);padding:14px 16px;">
+        <div style="font-weight:600;font-size:14px;">${a.title}</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-top:4px;">${a.body}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">${new Date(a.created_at).toLocaleDateString()}</div>
+      </div>`).join('');
+    document.getElementById('an-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:13.5px;">No announcements yet.</p>';
   }
 </script>
 </body>
