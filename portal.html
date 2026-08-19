@@ -66,6 +66,24 @@
   .desc-block{margin:16px 0;font-size:14px;line-height:1.6;}
   .upload-zone{border:1.5px dashed var(--navy-line);padding:24px 16px;text-align:center;margin:16px 0;background:var(--cream);}
   .upload-zone p{font-size:12.5px;color:var(--ink-soft);margin:6px 0 12px;}
+
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--cream-2);}
+  .table-scroll table{border:none;min-width:480px;}
+
+  /* Phone layout */
+  @media (max-width: 640px){
+    .wrap{padding:0 16px;}
+    header .wrap{flex-wrap:wrap;gap:10px;}
+    header h1{font-size:17px;}
+    #portal-tabs{flex-wrap:wrap;width:100%;order:3;}
+    .tab-btn{padding:8px 12px;font-size:12px;flex:1 1 auto;text-align:center;}
+    #logout{order:2;margin-left:auto;}
+    input, select, textarea{font-size:16px;} /* prevents iOS auto-zoom on focus */
+    button.primary, .btn-sm{min-height:42px;}
+    main{padding:24px 0 60px;}
+    .welcome{font-size:14px;}
+    #login-view, #signup-view{margin:40px auto;padding:24px;max-width:calc(100% - 32px);}
+  }
 </style>
 </head>
 <body>
@@ -152,10 +170,10 @@
     </div>
 
     <div id="attendance-panel" class="tab-panel">
-      <table>
+      <div class="table-scroll"><table>
         <thead><tr><th>Date</th><th>Status</th><th>Note</th></tr></thead>
         <tbody id="attendance-table"></tbody>
-      </table>
+      </table></div>
     </div>
 
     <div id="myrota-panel" class="tab-panel">
@@ -175,10 +193,10 @@
 
     <div id="rate-panel" class="tab-panel">
       <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Check off and rate this week's completed rota duties.</p>
-      <table>
+      <div class="table-scroll"><table>
         <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th></th></tr></thead>
         <tbody id="rate-table"></tbody>
-      </table>
+      </table></div>
     </div>
 
   </div>

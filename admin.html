@@ -74,6 +74,28 @@
     .status-tag { border:1px solid #999; background:#fff !important; color:#111 !important; }
     .status-tag .dot { background:#111 !important; }
   }
+
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--cream-2);}
+  .table-scroll table{border:none;min-width:520px;}
+
+  /* Phone layout */
+  @media (max-width: 640px){
+    .wrap{padding:0 16px;}
+    header .wrap{flex-wrap:wrap;gap:10px;}
+    header h1{font-size:17px;}
+    #admin-tabs{flex-wrap:wrap;width:100%;order:3;}
+    .tab-btn{padding:8px 12px;font-size:12px;flex:1 1 auto;text-align:center;}
+    #logout{order:2;margin-left:auto;}
+    .grid2{grid-template-columns:1fr;}
+    input, select, textarea{font-size:16px;} /* prevents iOS auto-zoom on focus */
+    button.primary{min-height:42px;}
+    .btn-sm{min-height:38px;padding:8px 12px;}
+    main{padding:24px 0 60px;}
+    section{padding:18px;}
+    #login-view{margin:40px auto;padding:24px;max-width:calc(100% - 32px);}
+    .filter-bar{flex-direction:column;align-items:stretch;}
+    .filter-bar .field{min-width:0;}
+  }
 </style>
 </head>
 <body>
@@ -112,10 +134,10 @@
 
     <section>
       <h2>Pending Approvals</h2>
-      <table>
+      <div class="table-scroll"><table>
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Requested</th><th>Action</th></tr></thead>
         <tbody id="pending-table"></tbody>
-      </table>
+      </table></div>
     </section>
 
     <section>
@@ -135,10 +157,10 @@
 
     <section>
       <h2>People</h2>
-      <table>
+      <div class="table-scroll"><table>
         <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="people-table"></tbody>
-      </table>
+      </table></div>
     </section>
 
     <div id="duties-panel" class="tab-panel active">
@@ -182,10 +204,10 @@
           <h2 style="margin-bottom:2px;">Selfless CE — Duty Overview</h2>
           <p style="color:var(--ink-soft);font-size:12.5px;margin:0 0 16px;" id="print-date"></p>
         </div>
-        <table>
+        <div class="table-scroll"><table>
           <thead><tr><th>Duty</th><th>Student</th><th>Due Date</th><th>Status</th></tr></thead>
           <tbody id="duties-table"></tbody>
-        </table>
+        </table></div>
       </section>
 
     </div>
@@ -219,10 +241,10 @@
           </div>
           <button class="btn-sm" id="a-filter-apply">Apply Filter</button>
         </div>
-        <table>
+        <div class="table-scroll"><table>
           <thead><tr><th>Date</th><th>Student</th><th>Status</th><th>Note</th></tr></thead>
           <tbody id="attendance-table"></tbody>
-        </table>
+        </table></div>
       </section>
 
     </div>
@@ -262,18 +284,18 @@
           <div class="field"><label>Week</label><input id="rota-filter-week" type="date"></div>
           <button class="btn-sm" id="rota-filter-apply">View Week</button>
         </div>
-        <table>
+        <div class="table-scroll"><table>
           <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th>Action</th></tr></thead>
           <tbody id="rota-table"></tbody>
-        </table>
+        </table></div>
       </section>
 
       <section>
         <h2>Swap Requests</h2>
-        <table>
+        <div class="table-scroll"><table>
           <thead><tr><th>Duty</th><th>Original Student</th><th>Reason</th><th>Status</th></tr></thead>
           <tbody id="swaps-table"></tbody>
-        </table>
+        </table></div>
       </section>
 
     </div>
