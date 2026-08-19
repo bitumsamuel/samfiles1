@@ -1,4 +1,4 @@
-const CACHE_NAME = 'selfless-ce-admin-v1';
+const CACHE_NAME = 'selfless-ce-admin-v2';
 const APP_SHELL = [
   './admin.html',
   './manifest-admin.json',
@@ -26,18 +26,17 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.url.includes('/api/')) return; // always hit the network for live admin data
 
+  // Network-first: always try to get the latest page when online, and only
+  // fall back to the cached copy if the network request fails (e.g. offline).
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const networkFetch = fetch(req)
-        .then((res) => {
-          if (res && res.status === 200 && req.method === 'GET') {
-            const resClone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && res.status === 200 && req.method === 'GET') {
+          const resClone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });
