@@ -65,14 +65,16 @@
   .filter-bar select{margin-bottom:0;}
 
   @media print {
-    header, #login-view, #admin-tabs, .filter-bar, section:not(#duty-overview-section) { display:none !important; }
+    header, #login-view, #admin-tabs, .filter-bar, section:not(#duty-overview-section):not(#rota-view-section) { display:none !important; }
     body { background:#fff; }
-    #duty-overview-section { border:none; padding:0; }
-    #print-header { display:block !important; }
+    #duty-overview-section, #rota-view-section { border:none; padding:0; }
+    #print-header, #rota-print-header { display:block !important; }
+    #rota-print { display:none !important; }
     table { border:1px solid #999; }
     th { background:#eee !important; color:#111 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .status-tag { border:1px solid #999; background:#fff !important; color:#111 !important; }
     .status-tag .dot { background:#111 !important; }
+    .table-scroll { overflow:visible !important; border:none !important; }
   }
 
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--cream-2);}
@@ -265,27 +267,36 @@
       </section>
 
       <section>
-        <h2>Generate This Week's Rota</h2>
+        <h2>Generate Rota (Multi-Week Block)</h2>
         <div class="grid2">
-          <div><label>Week Starting (Monday)</label><input id="rota-week" type="date"></div>
-          <div><label>Duty Types to Assign</label><select id="rota-duty-types" multiple size="4"></select></div>
+          <div><label>Block Start Date (Monday)</label><input id="rota-start" type="date"></div>
+          <div><label>Number of Weeks</label><input id="rota-weeks" type="number" min="1" max="12" value="7"></div>
         </div>
-        <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 14px;">
-          Assigns the fairest-turn active student to each duty automatically (fewest past assignments first).
-          Hold Ctrl/Cmd to select multiple duty types.
+        <label>Duty Types to Assign (each weekday, Mon–Fri)</label>
+        <select id="rota-duty-types" multiple size="4" style="margin-bottom:8px;"></select>
+        <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 14px;">
+          Assigns the fairest-turn active student to each duty, every weekday, for the whole block —
+          one click covers all weeks. Hold Ctrl/Cmd to select multiple duty types (e.g. Cooking + Cleaning).
         </p>
         <div class="error" id="rota-error" style="display:none;"></div>
         <button class="primary" id="rota-generate" style="width:auto;">Generate Rota</button>
       </section>
 
-      <section>
-        <h2>This Week's Assignments</h2>
-        <div class="filter-bar">
-          <div class="field"><label>Week</label><input id="rota-filter-week" type="date"></div>
-          <button class="btn-sm" id="rota-filter-apply">View Week</button>
+      <section id="rota-view-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin-bottom:0;">Assignments</h2>
+          <button class="btn-sm" id="rota-print" onclick="window.print()">🖨 Print</button>
+        </div>
+        <div id="rota-print-header" style="display:none;margin-bottom:14px;">
+          <strong>Selfless CE Mbale — Duty Rota</strong>
+        </div>
+        <div class="filter-bar" style="margin-top:16px;">
+          <div class="field"><label>From</label><input id="rota-filter-from" type="date"></div>
+          <div class="field"><label>To</label><input id="rota-filter-to" type="date"></div>
+          <button class="btn-sm" id="rota-filter-apply">View Range</button>
         </div>
         <div class="table-scroll"><table>
-          <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th>Action</th></tr></thead>
+          <thead><tr><th>Date</th><th>Day</th><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th>Action</th></tr></thead>
           <tbody id="rota-table"></tbody>
         </table></div>
       </section>
@@ -298,6 +309,21 @@
         </table></div>
       </section>
 
+    </div>
+
+    <div id="photo-review-modal" style="display:none;position:fixed;inset:0;background:rgba(14,35,64,0.75);z-index:300;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;max-width:480px;width:100%;padding:24px;border-radius:2px;max-height:90vh;overflow-y:auto;">
+        <h2 style="font-size:18px;margin-bottom:14px;">Review Proof of Completion</h2>
+        <img id="review-photo-img" src="" alt="Submitted proof" style="width:100%;border:1px solid var(--cream-2);margin-bottom:14px;">
+        <label>Rating (optional, 1-5)</label>
+        <input id="review-rating" type="number" min="1" max="5" placeholder="e.g. 5">
+        <div id="review-checklist" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:10px;">
+          <button class="primary" id="review-approve-btn" style="background:#2E7D4F;">Approve ✅</button>
+          <button class="primary" id="review-reject-btn" style="background:var(--err);">Reject</button>
+        </div>
+        <button id="review-close-btn" style="background:none;border:none;color:var(--ink-soft);font-size:13px;margin-top:12px;cursor:pointer;">Cancel</button>
+      </div>
     </div>
 
     <div id="announcements-panel" class="tab-panel">
@@ -328,6 +354,7 @@
 
   let token = localStorage.getItem('sce_admin_token') || null;
   let usersCache = [];
+  let rotaCache = [];
 
   const loginView = document.getElementById('login-view');
   const main = document.getElementById('main');
@@ -639,38 +666,71 @@
   document.getElementById('rota-generate').addEventListener('click', async () => {
     const errEl = document.getElementById('rota-error');
     errEl.style.display = 'none';
-    const week = document.getElementById('rota-week').value;
+    const start = document.getElementById('rota-start').value;
+    const weeks = Number(document.getElementById('rota-weeks').value) || 7;
     const selected = Array.from(document.getElementById('rota-duty-types').selectedOptions).map(o => Number(o.value));
-    if(!week || selected.length === 0){
-      errEl.textContent = 'Pick a week start date and at least one duty type.';
+    if(!start || selected.length === 0){
+      errEl.textContent = 'Pick a block start date (a Monday) and at least one duty type.';
       errEl.style.display = 'block';
       return;
     }
-    const data = await authed('/api/admin/rota/generate', { method:'POST', body: JSON.stringify({ week_start: week, duty_type_ids: selected }) });
+    const btn = document.getElementById('rota-generate');
+    btn.disabled = true; btn.textContent = 'Generating…';
+    const data = await authed('/api/admin/rota/generate', { method:'POST', body: JSON.stringify({ start_date: start, weeks, duty_type_ids: selected }) });
+    btn.disabled = false; btn.textContent = 'Generate Rota';
     if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
-    document.getElementById('rota-filter-week').value = week;
-    loadRota(week);
+    document.getElementById('rota-filter-from').value = start;
+    const end = new Date(start + 'T00:00:00Z');
+    end.setUTCDate(end.getUTCDate() + weeks * 7 - 3); // block end (Fri of last week)
+    document.getElementById('rota-filter-to').value = end.toISOString().slice(0,10);
+    loadRota();
   });
 
-  document.getElementById('rota-filter-apply').addEventListener('click', () => loadRota(document.getElementById('rota-filter-week').value));
+  document.getElementById('rota-filter-apply').addEventListener('click', loadRota);
 
-  async function loadRota(week){
-    const w = week || document.getElementById('rota-filter-week').value;
-    const params = new URLSearchParams();
-    if(w) params.set('week', w);
-    const data = await authed(`/api/admin/rota?${params.toString()}`);
-    const rows = (data.assignments || []).map(a => `
-      <tr>
-        <td>${a.duty_name}</td>
-        <td>${a.student_name}</td>
-        <td><span class="status-tag ${a.status === 'completed' ? 'completed' : a.status === 'swap_requested' ? 'pending' : 'pending'}"><span class="dot"></span>${a.status.replace('_',' ')}</span></td>
-        <td>${a.rating ? '★'.repeat(a.rating) : '—'}</td>
-        <td>${a.status !== 'completed' ? `<button class="btn-sm" onclick="rateAssignment(${a.id}, ${JSON.stringify(a.checklist).replace(/"/g,'&quot;')})">Rate / Check Off</button>` : ''}</td>
-      </tr>`).join('');
-    document.getElementById('rota-table').innerHTML = rows || '<tr><td colspan="5">No assignments for this week yet.</td></tr>';
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function rotaRowStatusTag(a){
+    if(a.review_status === 'pending_review') return `<span class="status-tag pending"><span class="dot"></span>awaiting review</span>`;
+    if(a.review_status === 'rejected') return `<span class="status-tag overdue"><span class="dot"></span>rejected — resubmit</span>`;
+    if(a.status === 'completed') return `<span class="status-tag completed"><span class="dot"></span>completed</span>`;
+    if(a.status === 'swap_requested') return `<span class="status-tag pending"><span class="dot"></span>swap requested</span>`;
+    return `<span class="status-tag pending"><span class="dot"></span>assigned</span>`;
   }
 
-  window.rateAssignment = async function(id, checklist){
+  async function loadRota(){
+    const from = document.getElementById('rota-filter-from').value;
+    const to = document.getElementById('rota-filter-to').value;
+    const params = new URLSearchParams();
+    if(from) params.set('from', from);
+    if(to) params.set('to', to);
+    const data = await authed(`/api/admin/rota?${params.toString()}`);
+    rotaCache = data.assignments || [];
+    const rows = rotaCache.map(a => {
+      const dayName = DAY_NAMES[new Date(a.assignment_date + 'T00:00:00Z').getUTCDay()];
+      let actionBtn = '';
+      if(a.review_status === 'pending_review'){
+        actionBtn = `<button class="btn-sm" style="background:var(--gold);color:var(--navy-deep);" onclick="openPhotoReview(${a.id})">Review Photo</button>`;
+      } else if(a.status !== 'completed'){
+        actionBtn = `<button class="btn-sm" onclick="rateAssignment(${a.id})">Mark Done ✅</button>`;
+      }
+      return `
+      <tr>
+        <td>${a.assignment_date}</td>
+        <td>${dayName}</td>
+        <td>${a.duty_name}</td>
+        <td>${a.student_name}</td>
+        <td>${rotaRowStatusTag(a)}</td>
+        <td>${a.rating ? '★'.repeat(a.rating) : '—'}</td>
+        <td>${actionBtn}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('rota-table').innerHTML = rows || '<tr><td colspan="7">No assignments in this range yet — generate a rota above.</td></tr>';
+  }
+
+  window.rateAssignment = async function(id){
+    const a = rotaCache.find(x => x.id === id);
+    const checklist = a ? a.checklist : [];
     const checked = [];
     for(const item of checklist){
       checked.push(confirm(`Completed: "${item}"?\n\nOK = Yes, Cancel = No`));
@@ -680,6 +740,47 @@
     await authed(`/api/admin/rota/${id}/rate`, { method:'POST', body: JSON.stringify({ checklist_state: checked, rating }) });
     loadRota();
   };
+
+  /* ---- Photo review modal ---- */
+  let reviewAssignmentId = null;
+  let reviewChecklist = [];
+
+  window.openPhotoReview = function(id){
+    const a = rotaCache.find(x => x.id === id);
+    if(!a) return;
+    reviewAssignmentId = id;
+    reviewChecklist = a.checklist || [];
+    document.getElementById('review-photo-img').src = a.photo_base64 || '';
+    document.getElementById('review-rating').value = '';
+    document.getElementById('review-checklist').innerHTML = reviewChecklist.map((item, i) =>
+      `<label style="display:flex;align-items:center;gap:8px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:400;margin-bottom:8px;">
+        <input type="checkbox" id="review-check-${i}" style="width:auto;margin:0;"> ${item}
+      </label>`
+    ).join('');
+    document.getElementById('photo-review-modal').style.display = 'flex';
+  };
+
+  document.getElementById('review-close-btn').addEventListener('click', () => {
+    document.getElementById('photo-review-modal').style.display = 'none';
+  });
+
+  document.getElementById('review-approve-btn').addEventListener('click', async () => {
+    const checklist_state = reviewChecklist.map((_, i) => document.getElementById(`review-check-${i}`)?.checked || false);
+    const ratingVal = document.getElementById('review-rating').value;
+    await authed(`/api/admin/rota/${reviewAssignmentId}/approve`, {
+      method:'POST', body: JSON.stringify({ checklist_state, rating: ratingVal ? Number(ratingVal) : null })
+    });
+    document.getElementById('photo-review-modal').style.display = 'none';
+    loadRota();
+  });
+
+  document.getElementById('review-reject-btn').addEventListener('click', async () => {
+    const note = prompt('Why is this being rejected? (shown to the student so they can redo it correctly)');
+    if(note === null) return;
+    await authed(`/api/admin/rota/${reviewAssignmentId}/reject`, { method:'POST', body: JSON.stringify({ note }) });
+    document.getElementById('photo-review-modal').style.display = 'none';
+    loadRota();
+  });
 
   async function loadSwaps(){
     // Swap requests are derived from rota assignments currently in 'swap_requested' status.

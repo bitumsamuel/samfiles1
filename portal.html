@@ -192,9 +192,9 @@
     </div>
 
     <div id="rate-panel" class="tab-panel">
-      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Check off and rate this week's completed rota duties.</p>
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Check off, review, and rate rota duties across the center.</p>
       <div class="table-scroll"><table>
-        <thead><tr><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Duty</th><th>Student</th><th>Status</th><th>Rating</th><th></th></tr></thead>
         <tbody id="rate-table"></tbody>
       </table></div>
     </div>
@@ -412,23 +412,52 @@
 
   /* ---- Duty Rota, Swap Board, Announcements ---- */
 
-  function rotaStatusBadgeClass(status){
-    return status === 'completed' ? 'paid' : status === 'swap_requested' ? 'failed' : 'pending';
+  function rotaStatusBadge(a){
+    if(a.review_status === 'pending_review') return `<span class="badge pending">awaiting review</span>`;
+    if(a.review_status === 'rejected') return `<span class="badge failed">rejected — redo</span>`;
+    if(a.status === 'completed') return `<span class="badge paid">completed</span>`;
+    if(a.status === 'swap_requested') return `<span class="badge failed">swap requested</span>`;
+    return `<span class="badge pending">assigned</span>`;
   }
 
   async function loadMyRota(){
     const data = await authed('/api/me/rota');
-    const items = (data.assignments || []).map(a => `
+    const items = (data.assignments || []).map(a => {
+      const canSubmit = a.status === 'assigned' && a.review_status !== 'pending_review';
+      const canSwap = a.status === 'assigned' && a.review_status !== 'pending_review';
+      return `
       <div class="duty-card" style="cursor:default;">
         <div class="top-row">
           <h3>${a.duty_name}</h3>
-          <span class="badge ${rotaStatusBadgeClass(a.status)}">${a.status.replace('_',' ')}</span>
+          ${rotaStatusBadge(a)}
         </div>
-        <div class="due">Week of ${a.week_start}</div>
-        ${a.status === 'assigned' ? `<button class="btn-sm" style="margin-top:10px;background:var(--navy-deep);color:#fff;border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;cursor:pointer;" onclick="requestSwap(${a.id})">Request Swap</button>` : ''}
-      </div>`).join('');
+        <div class="due">${a.assignment_date}</div>
+        ${a.review_status === 'rejected' && a.review_note ? `<div class="due" style="color:var(--err);margin-top:4px;">Tutor note: ${a.review_note}</div>` : ''}
+        ${canSubmit ? `
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            <label class="btn-sm" style="background:var(--gold);color:var(--navy-deep);border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;font-weight:600;cursor:pointer;">
+              📷 Submit Proof
+              <input type="file" accept="image/*" style="display:none;" onchange="submitProof(${a.id}, this)">
+            </label>
+            ${canSwap ? `<button class="btn-sm" style="background:var(--navy-deep);color:#fff;border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;cursor:pointer;" onclick="requestSwap(${a.id})">Request Swap</button>` : ''}
+          </div>` : ''}
+      </div>`;
+    }).join('');
     document.getElementById('myrota-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:14px;">No rota duties assigned yet.</p>';
   }
+
+  window.submitProof = async function(assignmentId, inputEl){
+    const file = inputEl.files[0];
+    if(!file) return;
+    if(file.size > 1_500_000){
+      alert('Please choose a smaller photo (under ~1.5MB).');
+      inputEl.value = '';
+      return;
+    }
+    const photo_base64 = await fileToBase64(file);
+    await authed(`/api/me/rota/${assignmentId}/submit-proof`, { method:'POST', body: JSON.stringify({ photo_base64 }) });
+    loadMyRota();
+  };
 
   window.requestSwap = async function(assignmentId){
     const reason = prompt('Why do you need a swap? (e.g. exam that day)');
@@ -445,7 +474,7 @@
           <h3>${s.duty_name}</h3>
           <span class="badge pending">open</span>
         </div>
-        <div class="due">Week of ${s.week_start} — currently ${s.original_student_name}</div>
+        <div class="due">${s.assignment_date} — currently ${s.original_student_name}</div>
         ${s.reason ? `<div class="due" style="margin-top:4px;">Reason: ${s.reason}</div>` : ''}
         <button class="btn-sm" style="margin-top:10px;background:var(--gold);color:var(--navy-deep);border:none;padding:8px 12px;border-radius:2px;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="acceptSwap(${s.id})">Accept This Duty</button>
       </div>`).join('');
@@ -471,20 +500,37 @@
     document.getElementById('news-list').innerHTML = items || '<p style="color:var(--ink-soft);font-size:14px;">No announcements yet.</p>';
   }
 
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let rateTableCache = [];
+
   async function loadRateTable(){
     const data = await authed('/api/admin/rota');
-    const rows = (data.assignments || []).map(a => `
+    rateTableCache = data.assignments || [];
+    const rows = rateTableCache.map(a => {
+      const dayName = DAY_NAMES[new Date(a.assignment_date + 'T00:00:00Z').getUTCDay()];
+      let actionBtn = '';
+      if(a.review_status === 'pending_review'){
+        actionBtn = `<button class="btn-sm" style="background:var(--gold);color:var(--navy-deep);border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick="reviewPhoto(${a.id})">Review Photo</button>`;
+      } else if(a.status !== 'completed'){
+        actionBtn = `<button class="btn-sm" style="background:var(--navy-deep);color:#fff;border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick="rateAssignment(${a.id})">Mark Done ✅</button>`;
+      }
+      const statusLabel = a.review_status === 'pending_review' ? 'awaiting review' : a.review_status === 'rejected' ? 'rejected' : a.status.replace('_',' ');
+      return `
       <tr>
+        <td>${a.assignment_date} (${dayName})</td>
         <td>${a.duty_name}</td>
         <td>${a.student_name}</td>
-        <td><span class="badge ${rotaStatusBadgeClass(a.status)}">${a.status.replace('_',' ')}</span></td>
+        <td><span class="badge ${a.status === 'completed' ? 'paid' : 'pending'}">${statusLabel}</span></td>
         <td>${a.rating ? '★'.repeat(a.rating) : '—'}</td>
-        <td>${a.status !== 'completed' ? `<button class="btn-sm" style="background:var(--navy-deep);color:#fff;border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick='rateAssignment(${a.id}, ${JSON.stringify(a.checklist)})'>Rate</button>` : ''}</td>
-      </tr>`).join('');
-    document.getElementById('rate-table').innerHTML = rows || '<tr><td colspan="5">No rota assignments yet.</td></tr>';
+        <td>${actionBtn}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('rate-table').innerHTML = rows || '<tr><td colspan="6">No rota assignments yet.</td></tr>';
   }
 
-  window.rateAssignment = async function(id, checklist){
+  window.rateAssignment = async function(id){
+    const a = rateTableCache.find(x => x.id === id);
+    const checklist = a ? a.checklist : [];
     const checked = [];
     for(const item of checklist){
       checked.push(confirm(`Completed: "${item}"?\n\nOK = Yes, Cancel = No`));
@@ -492,6 +538,30 @@
     const ratingStr = prompt('Rating 1-5 (how well was it done?):', '5');
     const rating = ratingStr ? Number(ratingStr) : null;
     await authed(`/api/admin/rota/${id}/rate`, { method:'POST', body: JSON.stringify({ checklist_state: checked, rating }) });
+    loadRateTable();
+  };
+
+  window.reviewPhoto = async function(id){
+    const a = rateTableCache.find(x => x.id === id);
+    if(!a) return;
+    const win = window.open('', '_blank', 'width=420,height=560');
+    win.document.write(`<title>Proof of Completion</title><body style="margin:0;font-family:sans-serif;text-align:center;">
+      <img src="${a.photo_base64}" style="max-width:100%;"><p style="padding:12px;">${a.duty_name} — ${a.student_name}</p></body>`);
+    const approve = confirm('Photo opened in a new tab. Does it show the duty was done properly?\n\nOK = Approve, Cancel = Reject');
+    if(approve){
+      const checklist = a.checklist || [];
+      const checked = [];
+      for(const item of checklist){
+        checked.push(confirm(`Completed: "${item}"?\n\nOK = Yes, Cancel = No`));
+      }
+      const ratingStr = prompt('Rating 1-5 (how well was it done?):', '5');
+      const rating = ratingStr ? Number(ratingStr) : null;
+      await authed(`/api/admin/rota/${id}/approve`, { method:'POST', body: JSON.stringify({ checklist_state: checked, rating }) });
+    } else {
+      const note = prompt('Why is this being rejected? (shown to the student)');
+      if(note === null) return;
+      await authed(`/api/admin/rota/${id}/reject`, { method:'POST', body: JSON.stringify({ note }) });
+    }
     loadRateTable();
   };
 
