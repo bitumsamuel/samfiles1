@@ -70,16 +70,23 @@
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--cream-2);}
   .table-scroll table{border:none;min-width:480px;}
 
+  .day-toggle{background:#fff;border:1px solid var(--cream-2);color:var(--ink-soft);padding:6px 10px;font-size:12px;border-radius:2px;cursor:pointer;}
+  .day-toggle.active{background:var(--navy-mid);color:#fff;border-color:var(--navy-mid);}
+  #avatar-label{display:inline-flex;align-items:center;}
+  .week-header{background:var(--cream-2);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy-deep);padding:8px 4px;margin:14px 0 4px;}
+
   /* Phone layout */
   @media (max-width: 640px){
     .wrap{padding:0 16px;}
     header .wrap{flex-wrap:wrap;gap:10px;}
     header h1{font-size:17px;}
+    header .wrap > div:last-child{width:100%;flex-wrap:wrap;justify-content:flex-start;gap:10px;}
     #portal-tabs{flex-wrap:wrap;width:100%;order:3;}
     .tab-btn{padding:8px 12px;font-size:12px;flex:1 1 auto;text-align:center;}
+    #avatar-label{order:1;}
     #logout{order:2;margin-left:auto;}
     input, select, textarea{font-size:16px;} /* prevents iOS auto-zoom on focus */
-    button.primary, .btn-sm{min-height:42px;}
+    button.primary, .btn-sm, .day-toggle{min-height:42px;}
     main{padding:24px 0 60px;}
     .welcome{font-size:14px;}
     #login-view, #signup-view{margin:40px auto;padding:24px;max-width:calc(100% - 32px);}
@@ -97,9 +104,16 @@
         <button class="tab-btn" data-tab="attendance">My Attendance</button>
         <button class="tab-btn" data-tab="myrota">Duty Rota</button>
         <button class="tab-btn" data-tab="board">Swap Board</button>
+        <button class="tab-btn" data-tab="grades">Grades</button>
+        <button class="tab-btn" data-tab="alarms">Alarms</button>
         <button class="tab-btn" data-tab="news">Announcements</button>
         <button class="tab-btn" data-tab="rate" id="rate-tab-btn" style="display:none;">Rate Duties</button>
       </nav>
+      <label id="avatar-label" style="display:none;cursor:pointer;" title="Update profile picture">
+        <img id="avatar-img" src="" style="display:none;width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--gold);">
+        <span id="avatar-placeholder" style="display:none;width:34px;height:34px;border-radius:50%;background:var(--navy-mid);color:var(--cream);align-items:center;justify-content:center;font-size:14px;font-weight:600;border:2px solid var(--gold);">?</span>
+        <input type="file" id="avatar-input" accept="image/*" style="display:none;">
+      </label>
       <button id="logout">Log out</button>
     </div>
   </div>
@@ -187,6 +201,40 @@
       <div class="duty-list" id="board-list"></div>
     </div>
 
+    <div id="grades-panel" class="tab-panel">
+      <div class="table-scroll"><table>
+        <thead><tr><th>Course</th><th>Grade</th><th>Progress</th></tr></thead>
+        <tbody id="grades-table"></tbody>
+      </table></div>
+    </div>
+
+    <div id="alarms-panel" class="tab-panel">
+      <div style="border:1px solid var(--cream-2);background:#fff;padding:16px;margin-bottom:16px;">
+        <label>Label</label>
+        <input id="al-label" placeholder="e.g. Morning study block">
+        <label>Time</label>
+        <input id="al-time" type="time">
+        <label style="margin-bottom:6px;">Days</label>
+        <div id="al-days" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+          <button type="button" class="day-toggle active" data-day="Sun">Sun</button>
+          <button type="button" class="day-toggle active" data-day="Mon">Mon</button>
+          <button type="button" class="day-toggle active" data-day="Tue">Tue</button>
+          <button type="button" class="day-toggle active" data-day="Wed">Wed</button>
+          <button type="button" class="day-toggle active" data-day="Thu">Thu</button>
+          <button type="button" class="day-toggle active" data-day="Fri">Fri</button>
+          <button type="button" class="day-toggle active" data-day="Sat">Sat</button>
+        </div>
+        <div class="error" id="al-error" style="display:none;"></div>
+        <button class="primary" id="al-submit" style="width:auto;">Add Alarm</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-soft);margin:0 0 14px;">
+        Alarms fire while this portal is open in your browser and you've allowed notifications. For a
+        reliable wake-up alarm, also set one on your phone — browsers can't guarantee alerts when the
+        app is fully closed.
+      </p>
+      <div class="duty-list" id="alarms-list"></div>
+    </div>
+
     <div id="news-panel" class="tab-panel">
       <div style="display:flex;flex-direction:column;gap:12px;" id="news-list"></div>
     </div>
@@ -263,8 +311,46 @@
     const me = await authed('/api/me');
     document.getElementById('welcome').textContent = `Welcome, ${me.name} (${me.role})`;
     if (me.role === 'tutor') document.getElementById('rate-tab-btn').style.display = 'inline-block';
+    document.getElementById('avatar-label').style.display = 'inline-flex';
+    renderAvatar(me.profile_photo, me.name);
+    if('Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission().catch(() => {});
+    }
     loadDuties();
+    loadAlarms();
+    startAlarmChecker();
   }
+
+  function renderAvatar(photo, name){
+    const img = document.getElementById('avatar-img');
+    const placeholder = document.getElementById('avatar-placeholder');
+    if(photo){
+      img.src = photo;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      placeholder.style.display = 'flex';
+      placeholder.textContent = (name || '?').charAt(0).toUpperCase();
+    }
+  }
+
+  document.getElementById('avatar-label').addEventListener('click', () => {
+    document.getElementById('avatar-input').click();
+  });
+
+  document.getElementById('avatar-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    if(file.size > 1_500_000){
+      alert('Please choose a smaller photo (under ~1.5MB).');
+      e.target.value = '';
+      return;
+    }
+    const photo_base64 = await fileToBase64(file);
+    await authed('/api/me/profile-photo', { method:'POST', body: JSON.stringify({ photo_base64 }) });
+    renderAvatar(photo_base64, document.getElementById('welcome').textContent);
+  });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -278,6 +364,8 @@
       if (btn.dataset.tab === 'board') loadSwapBoard();
       if (btn.dataset.tab === 'news') loadNews();
       if (btn.dataset.tab === 'rate') loadRateTable();
+      if (btn.dataset.tab === 'grades') loadGrades();
+      if (btn.dataset.tab === 'alarms') loadAlarms();
     });
   });
 
@@ -343,9 +431,12 @@
   document.getElementById('duty-back').addEventListener('click', () => { showDutyList(); loadDuties(); });
 
   async function loadDuties(){
-    const data = await authed('/api/me/duties');
+    const [dutiesData, rotaData] = await Promise.all([
+      authed('/api/me/duties'),
+      authed('/api/me/rota'),
+    ]);
     const list = document.getElementById('duty-list');
-    const rows = (data.duties || []).map(d => `
+    const oneOffRows = (dutiesData.duties || []).map(d => `
       <div class="duty-card" onclick="openDuty(${d.id})">
         <div class="top-row">
           <h3>${d.title}</h3>
@@ -353,7 +444,29 @@
         </div>
         <div class="due ${d.computed_status === 'overdue' ? 'overdue-text' : ''}">Due ${d.due_date}</div>
       </div>`).join('');
-    list.innerHTML = rows || '<p style="color:var(--ink-soft);font-size:14px;">No duties assigned yet.</p>';
+
+    const rotaAssignments = rotaData.assignments || [];
+    const weekStarts = [...new Set(rotaAssignments.map(a => a.week_start))].sort();
+    const weekLabels = new Map(weekStarts.map((ws, i) => [ws, `Week ${i + 1}`]));
+    let lastWeek = null;
+    const rotaRows = rotaAssignments.map(a => {
+      let weekHeader = '';
+      if(a.week_start !== lastWeek){
+        lastWeek = a.week_start;
+        weekHeader = `<div class="week-header">${weekLabels.get(a.week_start)} — week of ${a.week_start} (Rota)</div>`;
+      }
+      return `${weekHeader}
+      <div class="duty-card" style="cursor:default;">
+        <div class="top-row">
+          <h3>${a.duty_name}</h3>
+          ${rotaStatusBadge(a)}
+        </div>
+        <div class="due">${a.assignment_date}</div>
+      </div>`;
+    }).join('');
+
+    list.innerHTML = (oneOffRows || '<p style="color:var(--ink-soft);font-size:14px;">No one-off duties assigned yet.</p>')
+      + (rotaAssignments.length ? `<div class="week-header" style="margin-top:20px;">Duty Rota</div>${rotaRows}` : '');
   }
 
   let currentDutyId = null;
@@ -564,6 +677,104 @@
     }
     loadRateTable();
   };
+
+  /* ---- Grades ---- */
+
+  async function loadGrades(){
+    const data = await authed('/api/me/grades');
+    const rows = (data.grades || []).map(g => `
+      <tr>
+        <td>${g.course_name}</td>
+        <td>${g.grade || '—'}</td>
+        <td>${g.progress_percent != null ? `<div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;background:var(--cream-2);height:8px;border-radius:4px;overflow:hidden;"><div style="width:${g.progress_percent}%;background:var(--gold);height:100%;"></div></div><span style="font-size:12px;">${g.progress_percent}%</span></div>` : '—'}</td>
+      </tr>`).join('');
+    document.getElementById('grades-table').innerHTML = rows || '<tr><td colspan="3">No grades recorded yet.</td></tr>';
+  }
+
+  /* ---- Alarms ---- */
+
+  document.querySelectorAll('.day-toggle').forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+  });
+
+  document.getElementById('al-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('al-error');
+    errEl.style.display = 'none';
+    const label = document.getElementById('al-label').value;
+    const time = document.getElementById('al-time').value;
+    const days = Array.from(document.querySelectorAll('.day-toggle.active')).map(b => b.dataset.day);
+    if(!label || !time){
+      errEl.textContent = 'Please give the alarm a label and a time.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if(days.length === 0){
+      errEl.textContent = 'Pick at least one day.';
+      errEl.style.display = 'block';
+      return;
+    }
+    await authed('/api/me/alarms', { method:'POST', body: JSON.stringify({ label, time, days }) });
+    document.getElementById('al-label').value = '';
+    document.getElementById('al-time').value = '';
+    loadAlarms();
+  });
+
+  let alarmsCache = [];
+
+  async function loadAlarms(){
+    const data = await authed('/api/me/alarms');
+    alarmsCache = data.alarms || [];
+    const list = document.getElementById('alarms-list');
+    if(!list) return;
+    const rows = alarmsCache.map(a => `
+      <div class="duty-card" style="cursor:default;">
+        <div class="top-row">
+          <h3>${a.label}</h3>
+          <span class="badge ${a.enabled ? 'paid' : 'pending'}">${a.enabled ? 'on' : 'off'}</span>
+        </div>
+        <div class="due">${a.time} — ${a.days.join(', ')}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <button class="btn-sm" style="background:var(--navy-deep);color:#fff;border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick="toggleAlarm(${a.id})">${a.enabled ? 'Turn Off' : 'Turn On'}</button>
+          <button class="btn-sm" style="background:var(--err);color:#fff;border:none;padding:6px 10px;border-radius:2px;font-size:12px;cursor:pointer;" onclick="deleteAlarm(${a.id})">Delete</button>
+        </div>
+      </div>`).join('');
+    list.innerHTML = rows || '<p style="color:var(--ink-soft);font-size:14px;">No alarms set yet.</p>';
+  }
+
+  window.toggleAlarm = async function(id){
+    await authed(`/api/me/alarms/${id}/toggle`, { method:'POST', body:'{}' });
+    loadAlarms();
+  };
+
+  window.deleteAlarm = async function(id){
+    if(!confirm('Delete this alarm?')) return;
+    await authed(`/api/me/alarms/${id}`, { method:'DELETE' });
+    loadAlarms();
+  };
+
+  // Checks enabled alarms once a minute while the portal is open, and fires a browser
+  // notification (or a fallback alert) when the current time and weekday match.
+  let firedThisMinute = new Set();
+  function startAlarmChecker(){
+    setInterval(() => {
+      const now = new Date();
+      const hhmm = now.toTimeString().slice(0,5);
+      const dayName = DAY_NAMES[now.getDay()];
+      const key = hhmm;
+      if(firedThisMinute.has(key)) return;
+      const due = alarmsCache.filter(a => a.enabled && a.time === hhmm && a.days.includes(dayName));
+      if(due.length){
+        firedThisMinute = new Set([key]); // reset tracking each new minute
+        due.forEach(a => {
+          if('Notification' in window && Notification.permission === 'granted'){
+            new Notification('Selfless CE Reminder', { body: a.label });
+          } else {
+            alert(`Reminder: ${a.label}`);
+          }
+        });
+      }
+    }, 15000);
+  }
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

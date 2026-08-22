@@ -9,12 +9,15 @@ removed as of this version. This is now a login + duty tracking + attendance sys
 ## Contents
 
 - `index.html` — public site (with an AI chat bubble)
-- `admin.html` — admin dashboard: approve signups, manage people, assign/track duties, mark attendance
-- `portal.html` — student/tutor portal: My Duties, My Attendance (installable as a phone app — see below)
-- `worker.js` — Cloudflare Worker backend (auth, duties, attendance, chat)
+- `admin.html` — admin dashboard: approve signups, manage people, assign/track duties, mark attendance, duty rota, grades, notifications
+- `portal.html` — student/tutor portal: My Duties (incl. rota), My Attendance, Grades, Alarms (installable as a phone app — see below)
+- `worker.js` — Cloudflare Worker backend (auth, duties, attendance, rota, grades, alarms, notifications, chat)
 - `schema.sql` — database schema for a fresh setup
 - `migration_002_approved.sql` — adds account-approval support (only needed if you set up the DB before this feature existed)
 - `migration_003_remove_payments.sql` — removes the old payments table/columns (only needed if you had the finance version running before)
+- `migration_004_duty_rota.sql` — adds the Duty Rota system
+- `migration_005_rota_upgrade.sql` — upgrades rota to daily assignments + photo review workflow
+- `migration_006_features.sql` — adds Grades, Alarms, Notifications, profile photos, and archivable duty/rota history
 - `manifest.json`, `service-worker.js`, `icons/` — make `portal.html` installable as an app
 
 ## Run locally
@@ -162,3 +165,59 @@ and, for admins, at the top of `admin.html`'s own Announcements tab. Newest 20 s
 wrangler d1 execute selfless_finance --file=./migration_004_duty_rota.sql --remote
 wrangler deploy worker.js --name selfless-ce-backend
 ```
+
+## Grade & Progress Tracker
+
+Tracks each student's courses with both a grade and a progress percentage.
+
+**Admin/Tutor** (`admin.html` → "Grades" tab): pick a student, enter a course name, grade
+(free text — e.g. "A", "88%", "Pass"), and progress % (0–100). Edit or delete any row from
+the table below. Filter the table by student.
+
+**Students & Tutors** (`portal.html` → "Grades" tab): read-only view of their own courses,
+grade, and a visual progress bar.
+
+## Student Alarms / Reminders
+
+**Students & Tutors** (`portal.html` → "Alarms" tab): create a labeled reminder with a time
+and which days of the week it repeats on (defaults to every day). Toggle on/off or delete
+any alarm. While the portal is open in a browser tab and notifications are allowed, a
+browser notification fires at the set time (falls back to a plain alert if notifications
+aren't granted). This is a best-effort, in-app reminder — it can't fire once the browser tab
+is fully closed, so it's a companion to (not a replacement for) a phone alarm for anything
+truly time-critical, like a wake-up call.
+
+## Review Notifications
+
+When a student submits proof-of-completion for a rota duty, every admin and tutor gets an
+in-app notification (bell icon, top-right of `admin.html`, with an unread badge). Clicking a
+notification marks it read; "Mark all read" clears the badge in one click. Notifications
+refresh automatically every 30 seconds while the dashboard is open.
+
+## Duty Rota Weeks & "My Duties"
+
+Multi-week rota blocks are now labeled "Week 1" through however many weeks were generated
+(up to the "Number of Weeks" you set when generating), both in `admin.html`'s Duty Rota
+table and in `portal.html`'s "My Duties" tab, which now shows a student's rota assignments
+grouped by week alongside their one-off duties — no need to check a separate tab to see
+everything assigned to you.
+
+## Clearing Duty History
+
+Both `admin.html`'s "Duties" tab and "Duty Rota" tab have a **"Clear Duty History"** button.
+This **archives** (soft-hides) everything currently marked completed — it does not delete
+anything from the database, so history can be recovered later if ever needed. It simply
+keeps the working views focused on what's current.
+
+## Profile Pictures
+
+Students and tutors can tap their avatar (top-right of `portal.html`) to upload a profile
+picture. It shows in their own header and in the People table on `admin.html`. Stored as
+base64, same size cap (~1.5MB) as other photo uploads in this project.
+
+**One-time setup for this update:**
+```bash
+wrangler d1 execute selfless_finance --file=./migration_006_features.sql --remote
+wrangler deploy worker.js --name selfless-ce-backend
+```
+

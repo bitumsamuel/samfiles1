@@ -82,6 +82,19 @@ async function requireAuth(request, env, roles) {
   return payload; // { id, role, name, email, exp }
 }
 
+/* ---------------- notifications ---------------- */
+
+async function notifyReviewers(env, message, relatedId) {
+  const { results } = await env.DB.prepare(
+    "SELECT id FROM users WHERE role IN ('admin','tutor') AND approved = 1"
+  ).all();
+  for (const u of results) {
+    await env.DB.prepare(
+      "INSERT INTO notifications (user_id, type, message, related_id) VALUES (?, 'duty_review', ?, ?)"
+    ).bind(u.id, message, relatedId).run();
+  }
+}
+
 /* ---------------- chat assistant ---------------- */
 
 const SYSTEM_PROMPT = `You are the friendly AI assistant for Selfless CE, a nonprofit in Uganda
@@ -242,7 +255,7 @@ export default {
         const auth = await requireAuth(request, env, ["admin"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          "SELECT id, role, name, email, phone, status FROM users WHERE role != 'admin' AND approved = 1 ORDER BY name"
+          "SELECT id, role, name, email, phone, status, profile_photo FROM users WHERE role != 'admin' AND approved = 1 ORDER BY name"
         ).all();
         return json({ users: results });
       }
@@ -285,8 +298,10 @@ export default {
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const statusFilter = url.searchParams.get("status"); // pending | completed | overdue
         const studentFilter = url.searchParams.get("student_id");
+        const includeArchived = url.searchParams.get("include_archived") === "1";
         let query = `SELECT d.*, u.name as student_name FROM duties d JOIN users u ON u.id = d.student_id WHERE 1=1`;
         const binds = [];
+        if (!includeArchived) { query += ` AND d.archived = 0`; }
         if (studentFilter) { query += ` AND d.student_id = ?`; binds.push(studentFilter); }
         if (statusFilter === "completed") { query += ` AND d.status = 'completed'`; }
         else if (statusFilter === "pending") { query += ` AND d.status = 'pending' AND d.due_date >= date('now')`; }
@@ -305,7 +320,7 @@ export default {
         const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
         const { results } = await env.DB.prepare(
-          "SELECT id, title, description, due_date, priority, status, completed_at FROM duties WHERE student_id = ? ORDER BY due_date ASC"
+          "SELECT id, title, description, due_date, priority, status, completed_at FROM duties WHERE student_id = ? AND archived = 0 ORDER BY due_date ASC"
         ).bind(auth.id).all();
         const withComputedStatus = results.map((d) => ({
           ...d,
@@ -479,11 +494,13 @@ export default {
         const week = url.searchParams.get("week");
         const from = url.searchParams.get("from");
         const to = url.searchParams.get("to");
+        const includeArchived = url.searchParams.get("include_archived") === "1";
         let query = `SELECT r.*, u.name as student_name, dt.name as duty_name, dt.checklist_json
                       FROM rota_assignments r
                       JOIN users u ON u.id = r.student_id
                       JOIN duty_types dt ON dt.id = r.duty_type_id WHERE 1=1`;
         const binds = [];
+        if (!includeArchived) { query += ` AND r.archived = 0`; }
         if (week) { query += ` AND r.week_start = ?`; binds.push(week); }
         if (from) { query += ` AND r.assignment_date >= ?`; binds.push(from); }
         if (to) { query += ` AND r.assignment_date <= ?`; binds.push(to); }
@@ -540,7 +557,7 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT r.*, dt.name as duty_name, dt.checklist_json FROM rota_assignments r
            JOIN duty_types dt ON dt.id = r.duty_type_id
-           WHERE r.student_id = ? ORDER BY r.assignment_date DESC`
+           WHERE r.student_id = ? AND r.archived = 0 ORDER BY r.assignment_date DESC`
         ).bind(auth.id).all();
         return json({ assignments: results.map((r) => ({ ...r, checklist: JSON.parse(r.checklist_json || "[]") })) });
       }
@@ -559,6 +576,12 @@ export default {
         await env.DB.prepare(
           `UPDATE rota_assignments SET photo_base64 = ?, submitted_at = CURRENT_TIMESTAMP, review_status = 'pending_review', review_note = NULL WHERE id = ?`
         ).bind(b.photo_base64, assignment.id).run();
+        const dutyType = await env.DB.prepare("SELECT name FROM duty_types WHERE id = ?").bind(assignment.duty_type_id).first();
+        await notifyReviewers(
+          env,
+          `${auth.name} submitted proof for "${dutyType ? dutyType.name : "a duty"}" (${assignment.assignment_date}) — awaiting review.`,
+          assignment.id
+        );
         return json({ ok: true });
       }
 
@@ -627,7 +650,18 @@ export default {
       if (path === "/api/me" && request.method === "GET") {
         const auth = await requireAuth(request, env, ["student", "tutor"]);
         if (!auth) return json({ error: "Unauthorized" }, 401);
-        return json({ id: auth.id, name: auth.name, email: auth.email, role: auth.role });
+        const user = await env.DB.prepare("SELECT profile_photo FROM users WHERE id = ?").bind(auth.id).first();
+        return json({ id: auth.id, name: auth.name, email: auth.email, role: auth.role, profile_photo: user ? user.profile_photo : null });
+      }
+
+      // Student/tutor: upload or replace their own profile picture
+      if (path === "/api/me/profile-photo" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.photo_base64) return json({ error: "A photo is required." }, 400);
+        await env.DB.prepare("UPDATE users SET profile_photo = ? WHERE id = ?").bind(b.photo_base64, auth.id).run();
+        return json({ ok: true });
       }
 
       if (path === "/api/me/attendance" && request.method === "GET") {
@@ -637,6 +671,139 @@ export default {
           "SELECT date, status, note FROM attendance WHERE student_id = ? ORDER BY date DESC"
         ).bind(auth.id).all();
         return json({ attendance: results });
+      }
+
+      // ---- Admin: clear (archive) duty history ----
+      // Archives everything currently marked completed so it drops out of the working views,
+      // while keeping the rows in the database for later reference if ever needed.
+      if (path === "/api/admin/duties/archive-completed" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const res = await env.DB.prepare("UPDATE duties SET archived = 1 WHERE status = 'completed' AND archived = 0").run();
+        return json({ ok: true, archived: res.meta.changes });
+      }
+
+      if (path === "/api/admin/rota/archive-completed" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const res = await env.DB.prepare("UPDATE rota_assignments SET archived = 1 WHERE status = 'completed' AND archived = 0").run();
+        return json({ ok: true, archived: res.meta.changes });
+      }
+
+      // ---- Grade & Progress Tracker ----
+      if (path === "/api/admin/grades" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const studentFilter = url.searchParams.get("student_id");
+        let query = "SELECT g.*, u.name as student_name FROM grades g JOIN users u ON u.id = g.student_id WHERE 1=1";
+        const binds = [];
+        if (studentFilter) { query += " AND g.student_id = ?"; binds.push(studentFilter); }
+        query += " ORDER BY u.name, g.course_name";
+        const { results } = await env.DB.prepare(query).bind(...binds).all();
+        return json({ grades: results });
+      }
+
+      // Create or update a course grade/progress row for a student (upsert by id if provided)
+      if (path === "/api/admin/grades" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.student_id || !b.course_name) return json({ error: "student_id and course_name are required" }, 400);
+        if (b.progress_percent != null && (b.progress_percent < 0 || b.progress_percent > 100)) {
+          return json({ error: "progress_percent must be between 0 and 100" }, 400);
+        }
+        if (b.id) {
+          await env.DB.prepare(
+            "UPDATE grades SET course_name = ?, grade = ?, progress_percent = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+          ).bind(b.course_name, b.grade || null, b.progress_percent ?? null, auth.id, b.id).run();
+          return json({ id: b.id });
+        }
+        const res = await env.DB.prepare(
+          "INSERT INTO grades (student_id, course_name, grade, progress_percent, updated_by) VALUES (?, ?, ?, ?, ?)"
+        ).bind(b.student_id, b.course_name, b.grade || null, b.progress_percent ?? null, auth.id).run();
+        return json({ id: res.meta.last_row_id });
+      }
+
+      const deleteGradeMatch = path.match(/^\/api\/admin\/grades\/(\d+)$/);
+      if (deleteGradeMatch && request.method === "DELETE") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("DELETE FROM grades WHERE id = ?").bind(deleteGradeMatch[1]).run();
+        return json({ ok: true });
+      }
+
+      if (path === "/api/me/grades" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          "SELECT id, course_name, grade, progress_percent, updated_at FROM grades WHERE student_id = ? ORDER BY course_name"
+        ).bind(auth.id).all();
+        return json({ grades: results });
+      }
+
+      // ---- Student alarms/reminders ----
+      if (path === "/api/me/alarms" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM alarms WHERE student_id = ? ORDER BY time ASC"
+        ).bind(auth.id).all();
+        return json({ alarms: results.map((a) => ({ ...a, days: JSON.parse(a.days_json || "[]") })) });
+      }
+
+      if (path === "/api/me/alarms" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const b = await request.json();
+        if (!b.label || !b.time) return json({ error: "label and time are required" }, 400);
+        const days = Array.isArray(b.days) && b.days.length ? b.days : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const res = await env.DB.prepare(
+          "INSERT INTO alarms (student_id, label, time, days_json) VALUES (?, ?, ?, ?)"
+        ).bind(auth.id, b.label, b.time, JSON.stringify(days)).run();
+        return json({ id: res.meta.last_row_id });
+      }
+
+      const toggleAlarmMatch = path.match(/^\/api\/me\/alarms\/(\d+)\/toggle$/);
+      if (toggleAlarmMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const alarm = await env.DB.prepare("SELECT * FROM alarms WHERE id = ? AND student_id = ?").bind(toggleAlarmMatch[1], auth.id).first();
+        if (!alarm) return json({ error: "Not found" }, 404);
+        await env.DB.prepare("UPDATE alarms SET enabled = ? WHERE id = ?").bind(alarm.enabled ? 0 : 1, alarm.id).run();
+        return json({ ok: true, enabled: alarm.enabled ? 0 : 1 });
+      }
+
+      const deleteAlarmMatch = path.match(/^\/api\/me\/alarms\/(\d+)$/);
+      if (deleteAlarmMatch && request.method === "DELETE") {
+        const auth = await requireAuth(request, env, ["student", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("DELETE FROM alarms WHERE id = ? AND student_id = ?").bind(deleteAlarmMatch[1], auth.id).run();
+        return json({ ok: true });
+      }
+
+      // ---- Notifications (admin/tutor: e.g. duties awaiting review) ----
+      if (path === "/api/admin/notifications" && request.method === "GET") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 40"
+        ).bind(auth.id).all();
+        return json({ notifications: results });
+      }
+
+      const readNotifMatch = path.match(/^\/api\/admin\/notifications\/(\d+)\/read$/);
+      if (readNotifMatch && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?").bind(readNotifMatch[1], auth.id).run();
+        return json({ ok: true });
+      }
+
+      if (path === "/api/admin/notifications/read-all" && request.method === "POST") {
+        const auth = await requireAuth(request, env, ["admin", "tutor"]);
+        if (!auth) return json({ error: "Unauthorized" }, 401);
+        await env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0").bind(auth.id).run();
+        return json({ ok: true });
       }
 
       return json({ error: "Not found" }, 404);

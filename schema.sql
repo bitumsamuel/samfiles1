@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_salt TEXT NOT NULL,
   approved INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','probation','internship')),
+  profile_photo TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS duties (
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed')),
   photo_base64 TEXT,
   created_by INTEGER,
+  archived INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   completed_at TEXT,
   FOREIGN KEY(student_id) REFERENCES users(id)
@@ -65,6 +67,14 @@ CREATE TABLE IF NOT EXISTS rota_assignments (
   rating INTEGER CHECK(rating BETWEEN 1 AND 5),
   rated_by INTEGER,
   rated_at TEXT,
+  assignment_date TEXT NOT NULL DEFAULT '',
+  photo_base64 TEXT,
+  submitted_at TEXT,
+  review_status TEXT,
+  review_note TEXT,
+  reviewed_by INTEGER,
+  reviewed_at TEXT,
+  archived INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(duty_type_id) REFERENCES duty_types(id),
   FOREIGN KEY(student_id) REFERENCES users(id)
@@ -92,4 +102,44 @@ CREATE TABLE IF NOT EXISTS announcements (
   created_by INTEGER,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS grades (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  course_name TEXT NOT NULL,
+  grade TEXT,
+  progress_percent INTEGER CHECK(progress_percent BETWEEN 0 AND 100),
+  updated_by INTEGER,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(student_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_grades_student ON grades(student_id);
+
+CREATE TABLE IF NOT EXISTS alarms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  time TEXT NOT NULL,
+  days_json TEXT NOT NULL DEFAULT '["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(student_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alarms_student ON alarms(student_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  related_id INTEGER,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
 

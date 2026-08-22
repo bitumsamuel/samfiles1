@@ -85,8 +85,10 @@
     .wrap{padding:0 16px;}
     header .wrap{flex-wrap:wrap;gap:10px;}
     header h1{font-size:17px;}
+    header .wrap > div:last-child{width:100%;flex-wrap:wrap;justify-content:flex-start;gap:10px;}
     #admin-tabs{flex-wrap:wrap;width:100%;order:3;}
     .tab-btn{padding:8px 12px;font-size:12px;flex:1 1 auto;text-align:center;}
+    #notif-bell{order:1;}
     #logout{order:2;margin-left:auto;}
     .grid2{grid-template-columns:1fr;}
     input, select, textarea{font-size:16px;} /* prevents iOS auto-zoom on focus */
@@ -95,6 +97,7 @@
     main{padding:24px 0 60px;}
     section{padding:18px;}
     #login-view{margin:40px auto;padding:24px;max-width:calc(100% - 32px);}
+    #notif-panel{left:16px;right:16px;width:auto;top:64px;}
     .filter-bar{flex-direction:column;align-items:stretch;}
     .filter-bar .field{min-width:0;}
   }
@@ -113,12 +116,24 @@
         <button class="tab-btn active" data-tab="duties">Duties</button>
         <button class="tab-btn" data-tab="attendance">Attendance</button>
         <button class="tab-btn" data-tab="rota">Duty Rota</button>
+        <button class="tab-btn" data-tab="grades">Grades</button>
         <button class="tab-btn" data-tab="announcements">Announcements</button>
       </nav>
+      <button id="notif-bell" style="display:none;position:relative;background:none;border:1px solid rgba(247,243,234,0.4);color:var(--cream);padding:8px 12px;border-radius:2px;cursor:pointer;font-size:15px;">
+        🔔<span id="notif-count" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--err);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:999px;align-items:center;justify-content:center;line-height:16px;">0</span>
+      </button>
       <button id="logout" style="display:none;">Log out</button>
     </div>
   </div>
 </header>
+
+<div id="notif-panel" style="display:none;position:fixed;top:64px;right:16px;width:340px;max-width:calc(100% - 32px);max-height:70vh;overflow-y:auto;background:#fff;border:1px solid var(--cream-2);box-shadow:0 8px 24px rgba(14,35,64,0.18);z-index:400;">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--cream-2);">
+    <strong style="font-size:14px;">Notifications</strong>
+    <button id="notif-mark-all" style="background:none;border:none;color:var(--navy-mid);font-size:12px;cursor:pointer;font-weight:600;">Mark all read</button>
+  </div>
+  <div id="notif-list" style="padding:6px 0;"></div>
+</div>
 
 <div id="login-view">
   <h2>Admin Login</h2>
@@ -160,7 +175,7 @@
     <section>
       <h2>People</h2>
       <div class="table-scroll"><table>
-        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
+        <thead><tr><th></th><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="people-table"></tbody>
       </table></div>
     </section>
@@ -201,6 +216,7 @@
           </div>
           <button class="btn-sm" id="d-filter-apply">Apply Filters</button>
           <button class="btn-sm" id="d-print" style="background:var(--navy-mid);">Print</button>
+          <button class="btn-sm" id="d-clear-history" style="background:var(--err);">Clear Duty History</button>
         </div>
         <div id="print-header" style="display:none;">
           <h2 style="margin-bottom:2px;">Selfless CE — Duty Overview</h2>
@@ -285,7 +301,10 @@
       <section id="rota-view-section">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
           <h2 style="margin-bottom:0;">Assignments</h2>
-          <button class="btn-sm" id="rota-print" onclick="window.print()">🖨 Print</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-sm" id="rota-clear-history" style="background:var(--err);">Clear Duty History</button>
+            <button class="btn-sm" id="rota-print" onclick="window.print()">🖨 Print</button>
+          </div>
         </div>
         <div id="rota-print-header" style="display:none;margin-bottom:14px;">
           <strong>Selfless CE Mbale — Duty Rota</strong>
@@ -324,6 +343,39 @@
         </div>
         <button id="review-close-btn" style="background:none;border:none;color:var(--ink-soft);font-size:13px;margin-top:12px;cursor:pointer;">Cancel</button>
       </div>
+    </div>
+
+    <div id="grades-panel" class="tab-panel">
+
+      <section>
+        <h2>Grade & Progress Tracker</h2>
+        <div class="grid2">
+          <div><label>Student</label><select id="g-student"></select></div>
+          <div><label>Course Name</label><input id="g-course" placeholder="e.g. Foundations of Writing"></div>
+          <div><label>Grade</label><input id="g-grade" placeholder="e.g. A, 88%, Pass"></div>
+          <div><label>Progress %</label><input id="g-progress" type="number" min="0" max="100" placeholder="e.g. 75"></div>
+        </div>
+        <input type="hidden" id="g-edit-id">
+        <div class="error" id="g-error" style="display:none;"></div>
+        <button class="primary" id="g-submit" style="width:auto;">Save Grade</button>
+        <button id="g-cancel-edit" style="display:none;background:none;border:none;color:var(--ink-soft);font-size:13px;margin-left:10px;cursor:pointer;">Cancel edit</button>
+      </section>
+
+      <section>
+        <h2>All Grades</h2>
+        <div class="filter-bar">
+          <div class="field">
+            <label>Student</label>
+            <select id="g-filter-student"><option value="">All students</option></select>
+          </div>
+          <button class="btn-sm" id="g-filter-apply">Apply Filter</button>
+        </div>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Student</th><th>Course</th><th>Grade</th><th>Progress</th><th>Updated</th><th></th></tr></thead>
+          <tbody id="grades-table"></tbody>
+        </table></div>
+      </section>
+
     </div>
 
     <div id="announcements-panel" class="tab-panel">
@@ -365,9 +417,12 @@
     main.style.display = 'block';
     logoutBtn.style.display = 'inline-block';
     document.getElementById('admin-tabs').style.display = 'flex';
+    document.getElementById('notif-bell').style.display = 'inline-flex';
     loadUsers();
     loadPending();
     loadDuties();
+    loadNotifications();
+    notifPollInterval = setInterval(loadNotifications, 30000);
   }
 
   if(token){ showApp(); }
@@ -381,9 +436,133 @@
       if (btn.dataset.tab === 'duties') loadDuties();
       if (btn.dataset.tab === 'attendance') loadAttendance();
       if (btn.dataset.tab === 'rota') { loadDutyTypes(); loadRota(); loadSwaps(); }
+      if (btn.dataset.tab === 'grades') loadGrades();
       if (btn.dataset.tab === 'announcements') loadAnnouncements();
     });
   });
+
+  /* ---- Notifications ---- */
+  let notifPollInterval = null;
+  let notifCache = [];
+
+  async function loadNotifications(){
+    const data = await authed('/api/admin/notifications');
+    notifCache = data.notifications || [];
+    const unread = notifCache.filter(n => !n.is_read).length;
+    const countEl = document.getElementById('notif-count');
+    if(unread > 0){
+      countEl.style.display = 'flex';
+      countEl.textContent = unread > 9 ? '9+' : unread;
+    } else {
+      countEl.style.display = 'none';
+    }
+    const rows = notifCache.map(n => `
+      <div style="padding:10px 16px;border-bottom:1px solid var(--cream-2);font-size:13px;${n.is_read ? 'opacity:0.55;' : ''}cursor:pointer;" onclick="markNotifRead(${n.id})">
+        <div>${n.message}</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">${new Date(n.created_at).toLocaleString()}</div>
+      </div>`).join('');
+    document.getElementById('notif-list').innerHTML = rows || '<div style="padding:16px;font-size:13px;color:var(--ink-soft);">No notifications yet.</div>';
+  }
+
+  window.markNotifRead = async function(id){
+    await authed(`/api/admin/notifications/${id}/read`, { method:'POST', body:'{}' });
+    loadNotifications();
+  };
+
+  document.getElementById('notif-bell').addEventListener('click', () => {
+    const panel = document.getElementById('notif-panel');
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  });
+
+  document.getElementById('notif-mark-all').addEventListener('click', async () => {
+    await authed('/api/admin/notifications/read-all', { method:'POST', body:'{}' });
+    loadNotifications();
+  });
+
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notif-panel');
+    const bell = document.getElementById('notif-bell');
+    if(panel.style.display === 'block' && !panel.contains(e.target) && !bell.contains(e.target)){
+      panel.style.display = 'none';
+    }
+  });
+
+  /* ---- Grade & Progress Tracker ---- */
+
+  document.getElementById('g-submit').addEventListener('click', async () => {
+    const errEl = document.getElementById('g-error');
+    errEl.style.display = 'none';
+    const editId = document.getElementById('g-edit-id').value;
+    const body = {
+      id: editId ? Number(editId) : undefined,
+      student_id: Number(document.getElementById('g-student').value),
+      course_name: document.getElementById('g-course').value,
+      grade: document.getElementById('g-grade').value,
+      progress_percent: document.getElementById('g-progress').value ? Number(document.getElementById('g-progress').value) : null,
+    };
+    if(!body.student_id || !body.course_name){
+      errEl.textContent = 'Student and course name are required.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await authed('/api/admin/grades', { method:'POST', body: JSON.stringify(body) });
+    if(data.error){ errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+    resetGradeForm();
+    loadGrades();
+  });
+
+  function resetGradeForm(){
+    document.getElementById('g-edit-id').value = '';
+    document.getElementById('g-course').value = '';
+    document.getElementById('g-grade').value = '';
+    document.getElementById('g-progress').value = '';
+    document.getElementById('g-submit').textContent = 'Save Grade';
+    document.getElementById('g-cancel-edit').style.display = 'none';
+  }
+
+  document.getElementById('g-cancel-edit').addEventListener('click', resetGradeForm);
+  document.getElementById('g-filter-apply').addEventListener('click', loadGrades);
+
+  let gradesCache = [];
+
+  async function loadGrades(){
+    const studentFilter = document.getElementById('g-filter-student').value;
+    const params = new URLSearchParams();
+    if(studentFilter) params.set('student_id', studentFilter);
+    const data = await authed(`/api/admin/grades?${params.toString()}`);
+    gradesCache = data.grades || [];
+    const rows = gradesCache.map(g => `
+      <tr>
+        <td>${g.student_name}</td>
+        <td>${g.course_name}</td>
+        <td>${g.grade || '—'}</td>
+        <td>${g.progress_percent != null ? g.progress_percent + '%' : '—'}</td>
+        <td>${new Date(g.updated_at).toLocaleDateString()}</td>
+        <td>
+          <button class="btn-sm" onclick="editGrade(${g.id})">Edit</button>
+          <button class="btn-sm" style="background:var(--err);margin-left:6px;" onclick="deleteGrade(${g.id})">Delete</button>
+        </td>
+      </tr>`).join('');
+    document.getElementById('grades-table').innerHTML = rows || '<tr><td colspan="6">No grades recorded yet.</td></tr>';
+  }
+
+  window.editGrade = function(id){
+    const g = gradesCache.find(x => x.id === id);
+    if(!g) return;
+    document.getElementById('g-edit-id').value = g.id;
+    document.getElementById('g-student').value = g.student_id;
+    document.getElementById('g-course').value = g.course_name;
+    document.getElementById('g-grade').value = g.grade || '';
+    document.getElementById('g-progress').value = g.progress_percent != null ? g.progress_percent : '';
+    document.getElementById('g-submit').textContent = 'Update Grade';
+    document.getElementById('g-cancel-edit').style.display = 'inline-block';
+  };
+
+  window.deleteGrade = async function(id){
+    if(!confirm('Delete this grade record?')) return;
+    await authed(`/api/admin/grades/${id}`, { method:'DELETE' });
+    loadGrades();
+  };
 
   document.getElementById('login-btn').addEventListener('click', async () => {
     const email = document.getElementById('login-email').value;
@@ -437,6 +616,7 @@
 
     const peopleRows = usersCache.map(u => `
       <tr>
+        <td>${u.profile_photo ? `<img src="${u.profile_photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">` : `<span style="display:inline-flex;width:32px;height:32px;border-radius:50%;background:var(--cream-2);align-items:center;justify-content:center;font-size:12px;color:var(--ink-soft);">${u.name.charAt(0)}</span>`}</td>
         <td>${u.name}</td>
         <td>${u.role}</td>
         <td>${u.email}</td>
@@ -452,7 +632,12 @@
           <button class="btn-sm" style="background:var(--err);margin-left:6px;" onclick="deleteUser(${u.id}, '${u.name.replace(/'/g, "\\'")}')">Delete</button>
         </td>
       </tr>`).join('');
-    document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="5">No students or tutors yet.</td></tr>';
+    document.getElementById('people-table').innerHTML = peopleRows || '<tr><td colspan="6">No students or tutors yet.</td></tr>';
+
+    const gSel = document.getElementById('g-student');
+    if (gSel) gSel.innerHTML = students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    const gFilterSel = document.getElementById('g-filter-student');
+    if (gFilterSel) gFilterSel.innerHTML = '<option value="">All students</option>' + students.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
 
     const dutySel = document.getElementById('rota-duty-types');
     if (dutySel && !dutySel.dataset.loaded) loadDutyTypes();
@@ -688,7 +873,30 @@
 
   document.getElementById('rota-filter-apply').addEventListener('click', loadRota);
 
+  document.getElementById('d-clear-history').addEventListener('click', async () => {
+    if(!confirm('Archive all completed duties out of this view? They stay in the database and are not permanently deleted.')) return;
+    const data = await authed('/api/admin/duties/archive-completed', { method:'POST', body:'{}' });
+    alert(`${data.archived || 0} completed duties archived.`);
+    loadDuties();
+  });
+
+  document.getElementById('rota-clear-history').addEventListener('click', async () => {
+    if(!confirm('Archive all completed rota duties out of this view? They stay in the database and are not permanently deleted.')) return;
+    const data = await authed('/api/admin/rota/archive-completed', { method:'POST', body:'{}' });
+    alert(`${data.archived || 0} completed rota assignments archived.`);
+    loadRota();
+  });
+
   const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  // Groups rota rows by week_start (ascending) and labels them Week 1, Week 2, ... in the
+  // order they appear, rather than by calendar week number.
+  function weekLabelMap(assignments){
+    const weekStarts = [...new Set(assignments.map(a => a.week_start))].sort();
+    const map = new Map();
+    weekStarts.forEach((ws, i) => map.set(ws, `Week ${i + 1}`));
+    return map;
+  }
 
   function rotaRowStatusTag(a){
     if(a.review_status === 'pending_review') return `<span class="status-tag pending"><span class="dot"></span>awaiting review</span>`;
@@ -706,6 +914,8 @@
     if(to) params.set('to', to);
     const data = await authed(`/api/admin/rota?${params.toString()}`);
     rotaCache = data.assignments || [];
+    const weekLabels = weekLabelMap(rotaCache);
+    let lastWeek = null;
     const rows = rotaCache.map(a => {
       const dayName = DAY_NAMES[new Date(a.assignment_date + 'T00:00:00Z').getUTCDay()];
       let actionBtn = '';
@@ -714,7 +924,12 @@
       } else if(a.status !== 'completed'){
         actionBtn = `<button class="btn-sm" onclick="rateAssignment(${a.id})">Mark Done ✅</button>`;
       }
-      return `
+      let weekHeader = '';
+      if(a.week_start !== lastWeek){
+        lastWeek = a.week_start;
+        weekHeader = `<tr><td colspan="7" style="background:var(--cream-2);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--navy-deep);">${weekLabels.get(a.week_start)} — week of ${a.week_start}</td></tr>`;
+      }
+      return `${weekHeader}
       <tr>
         <td>${a.assignment_date}</td>
         <td>${dayName}</td>
